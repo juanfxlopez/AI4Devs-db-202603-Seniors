@@ -32,6 +32,8 @@ model Education {
   endDate     DateTime?
   candidateId Int
   candidate   Candidate @relation(fields: [candidateId], references: [id])
+
+  @@index([candidateId])
 }
 
 model WorkExperience {
@@ -43,6 +45,8 @@ model WorkExperience {
   endDate     DateTime?
   candidateId Int
   candidate   Candidate @relation(fields: [candidateId], references: [id])
+
+  @@index([candidateId])
 }
 
 model Resume {
@@ -52,6 +56,8 @@ model Resume {
   uploadDate  DateTime
   candidateId Int
   candidate   Candidate @relation(fields: [candidateId], references: [id])
+
+  @@index([candidateId])
 }
 
 // ============================================================
@@ -96,6 +102,9 @@ model Employee {
   interviews Interview[]
   createdAt  DateTime    @default(now()) @db.Timestamptz(6)
   updatedAt  DateTime    @updatedAt @db.Timestamptz(6)
+
+  @@index([companyId])
+  @@unique([email, companyId])
 }
 
 model InterviewStep {
@@ -109,6 +118,9 @@ model InterviewStep {
   interviews      Interview[]
   createdAt       DateTime      @default(now()) @db.Timestamptz(6)
   updatedAt       DateTime      @updatedAt @db.Timestamptz(6)
+
+  @@index([interviewTypeId])
+  @@unique([interviewFlowId, orderIndex])
 }
 
 model Position {
@@ -135,6 +147,9 @@ model Position {
   applications        Application[]
   createdAt           DateTime      @default(now()) @db.Timestamptz(6)
   updatedAt           DateTime      @updatedAt @db.Timestamptz(6)
+
+  @@index([companyId])
+  @@index([companyId, status])
 }
 
 model Application {
@@ -149,6 +164,11 @@ model Application {
   interviews      Interview[]
   createdAt       DateTime    @default(now()) @db.Timestamptz(6)
   updatedAt       DateTime    @updatedAt @db.Timestamptz(6)
+
+  @@index([positionId])
+  @@index([candidateId])
+  @@index([positionId, status])
+  @@index([candidateId, status])
 }
 
 model Interview {
@@ -165,4 +185,9 @@ model Interview {
   employee        Employee      @relation(fields: [employeeId], references: [id])
   createdAt       DateTime      @default(now()) @db.Timestamptz(6)
   updatedAt       DateTime      @updatedAt @db.Timestamptz(6)
+
+  @@index([applicationId])
+  @@index([interviewStepId])
+  @@index([employeeId])
+  @@index([applicationId, interviewDate])
 }
