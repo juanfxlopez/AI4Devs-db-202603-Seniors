@@ -61,6 +61,50 @@ model Resume {
 }
 
 // ============================================================
+// ENUMS — Migration 4: add_enums
+// ============================================================
+
+enum PositionStatus {
+  DRAFT
+  OPEN
+  PAUSED
+  CLOSED
+  CANCELLED
+}
+
+enum ApplicationStatus {
+  PENDING
+  SCREENING
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+enum EmployeeRole {
+  RECRUITER
+  HIRING_MANAGER
+  INTERVIEWER
+  ADMIN
+}
+
+enum InterviewResult {
+  PENDING
+  PASS
+  FAIL
+  ON_HOLD
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  TEMPORARY
+}
+
+// ============================================================
 // ATS CORE ENTITIES — Migration 1: add_ats_core_entities
 // ============================================================
 
@@ -96,7 +140,7 @@ model Employee {
   companyId  Int
   name       String
   email      String
-  role       String
+  role       EmployeeRole
   isActive   Boolean
   company    Company     @relation(fields: [companyId], references: [id])
   interviews Interview[]
@@ -129,7 +173,7 @@ model Position {
   interviewFlowId     Int           @unique
   title               String
   description         String?
-  status              String
+  status              PositionStatus
   isVisible           Boolean
   location            String?
   jobDescription      String?
@@ -137,7 +181,7 @@ model Position {
   responsibilities    String?
   salaryMin           Decimal?      @db.Decimal(10, 2)
   salaryMax           Decimal?      @db.Decimal(10, 2)
-  employmentType      String?
+  employmentType      EmploymentType?
   benefits            String?
   companyDescription  String?
   applicationDeadline DateTime?     @db.Date
@@ -157,7 +201,7 @@ model Application {
   positionId      Int
   candidateId     Int
   applicationDate DateTime    @db.Date
-  status          String
+  status          ApplicationStatus
   notes           String?
   position        Position    @relation(fields: [positionId], references: [id])
   candidate       Candidate   @relation(fields: [candidateId], references: [id])
@@ -177,7 +221,7 @@ model Interview {
   interviewStepId Int
   employeeId      Int
   interviewDate   DateTime      @db.Timestamptz(6)
-  result          String?
+  result          InterviewResult?
   score           Int?
   notes           String?
   application     Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
