@@ -16,8 +16,8 @@ model Candidate {
   firstName       String           @db.VarChar(100)
   lastName        String           @db.VarChar(100)
   email           String           @unique @db.VarChar(255)
-  phone           String?          @db.VarChar(15)
-  address         String?          @db.VarChar(100)
+  phone           String           @db.VarChar(15)
+  address         String           @db.VarChar(100)
   educations      Education[]
   workExperiences WorkExperience[]
   resumes         Resume[]
