@@ -1,3 +1,4 @@
+import '../../config/env';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { Education } from './Education';
 import { WorkExperience } from './WorkExperience';

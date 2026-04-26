@@ -109,13 +109,13 @@ docker-compose down
 
 To generate the database using Prisma, follow these steps:
 
-1. Make sure that the .env file in the root directory of the backend contains the DATABASE_URL variable with the correct connection string to your PostgreSQL database. If it doesn't work, try replacing the full URL directly in schema.prisma, in the `url` variable.
+1. Make sure that the `.env` file in the repository root contains the `DATABASE_URL` variable with the correct connection string to your PostgreSQL database.
 
-2. Open a terminal and navigate to the backend directory where the schema.prisma file is located.
+2. Open a terminal and navigate to the backend directory.
 
 3. Run the following command to apply the migrations to your database:
 ```
-npx prisma migrate dev
+npm run prisma:migrate
 ```
 
 Once you have completed all the steps, you should be able to save new candidates both via the web and the API, and see them in the database.
@@ -262,13 +262,13 @@ docker-compose down
 
 Para generar la base de datos utilizando Prisma, sigue estos pasos:
 
-1. Asegúrate de que el archivo `.env` en el directorio raíz del backend contenga la variable `DATABASE_URL` con la cadena de conexión correcta a tu base de datos PostgreSQL. Si no te funciona, prueba a reemplazar la URL completa directamente en `schema.prisma`, en la variable `url`.
+1. Asegúrate de que el archivo `.env` en el directorio raíz del repositorio contenga la variable `DATABASE_URL` con la cadena de conexión correcta a tu base de datos PostgreSQL.
 
-2. Abre una terminal y navega al directorio del backend donde se encuentra el archivo `schema.prisma`.
+2. Abre una terminal y navega al directorio del backend.
 
 3. Ejecuta el siguiente comando para aplicar las migraciones a tu base de datos:
 ```
-npx prisma migrate dev
+npm run prisma:migrate
 ```
 
 Una vez has dado todos los pasos, deberías poder guardar nuevos candidatos, tanto via web, como via API, y verlos en la base de datos.
