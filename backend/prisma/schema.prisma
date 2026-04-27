@@ -20,6 +20,8 @@ model Candidate {
   email           String           @unique @db.VarChar(255)
   phone           String           @db.VarChar(15)
   address         String           @db.VarChar(100)
+  addressId       Int?             @unique
+  addressRecord   Address?         @relation(fields: [addressId], references: [id])
   educations      Education[]
   workExperiences WorkExperience[]
   resumes         Resume[]
@@ -54,12 +56,32 @@ model WorkExperience {
 model Resume {
   id          Int       @id @default(autoincrement())
   filePath    String    @db.VarChar(500)
-  fileType    String    @db.VarChar(50)
-  uploadDate  DateTime
+  fileType       String    @db.VarChar(50)
+  fileTypeParsed FileType?
+  uploadDate     DateTime
   candidateId Int
   candidate   Candidate @relation(fields: [candidateId], references: [id])
 
   @@index([candidateId])
+}
+
+// ============================================================
+// ADDRESS — Migration 7: normalize_3nf_expand
+// ============================================================
+
+model Address {
+  id         Int        @id @default(autoincrement())
+  street     String?    @db.VarChar(200)
+  city       String     @db.VarChar(100)
+  region     String?    @db.VarChar(100)
+  postalCode String?    @db.VarChar(20)
+  country    String     @db.VarChar(100)
+  candidate  Candidate?
+  createdAt  DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime   @updatedAt @db.Timestamptz(6)
+
+  @@unique([street, city, postalCode, country])
+  @@index([city, country])
 }
 
 // ============================================================
@@ -106,14 +128,21 @@ enum EmploymentType {
   TEMPORARY
 }
 
+// Migration 7: normalize_3nf_expand
+enum FileType {
+  PDF
+  DOCX
+}
+
 // ============================================================
 // ATS CORE ENTITIES — Migration 1: add_ats_core_entities
 // ============================================================
 
 model Company {
   id        Int        @id @default(autoincrement())
-  name      String
-  employees Employee[]
+  name        String
+  description String?
+  employees   Employee[]
   positions Position[]
   createdAt DateTime   @default(now()) @db.Timestamptz(6)
   updatedAt DateTime   @updatedAt @db.Timestamptz(6)
