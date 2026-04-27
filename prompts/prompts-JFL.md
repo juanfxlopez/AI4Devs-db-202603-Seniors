@@ -1425,3 +1425,358 @@ style {
 
   ---
   State: STEP_2_REVIEW — reply step 3 to proceed to migration risk review.
+
+❯ step3
+
+  Row Counts at Review Time
+
+  ┌──────────────┬──────┐
+  │    Table     │ Rows │
+  ├──────────────┼──────┤
+  │ Candidate    │ 0    │
+  ├──────────────┼──────┤
+  │ Resume       │ 0    │
+  ├──────────────┼──────┤
+  │ Position     │ 0    │
+  ├──────────────┼──────┤
+  │ Company      │ 0    │
+  ├──────────────┼──────┤
+  │ (all others) │ 0    │
+  └──────────────┴──────┘
+
+  Findings
+
+  #: 1
+  Operation: CREATE TABLE Address
+  Table: Address (new)
+  Rows: 0
+  Short-term Risk: low
+  Risk narrative: Additive. No existing data affected.
+  ────────────────────────────────────────
+  #: 2
+  Operation: CREATE UNIQUE INDEX Address(street,city,postalCode,country)
+  Table: Address
+  Rows: 0
+  Short-term Risk: low
+  Risk narrative: Dedup constraint on new empty table. Risk deferred to contract phase when rows exist and duplicates must be resolved before
+
+    enforcing uniqueness.
+  ────────────────────────────────────────
+  #: 3
+  Operation: ALTER TABLE Candidate ADD COLUMN addressId INT NULLABLE
+  Table: Candidate
+  Rows: 0
+  Short-term Risk: low
+  Risk narrative: Additive nullable column. Zero downtime. Existing address VARCHAR(100) kept intact in expand phase.
+  ────────────────────────────────────────
+  #: 4
+  Operation: ADD CONSTRAINT Candidate_addressId_fkey FK → Address
+  Table: Candidate
+  Rows: 0
+  Short-term Risk: low
+  Risk narrative: FK on nullable column with 0 rows. Validates referential integrity going forward.
+  ────────────────────────────────────────
+  #: 5
+  Operation: CREATE UNIQUE INDEX Candidate(addressId)
+  Table: Candidate
+  Rows: 0
+  Short-term Risk: low
+  Risk narrative: Enforces one-to-one with 0 rows. Risk deferred: if rows existed without an address, the unique constraint would block      
+  insert
+    of NULL (allowed by default; NULL ≠ NULL in UNIQUE).
+  ────────────────────────────────────────
+  #: 6
+  Operation: ALTER TABLE Company ADD COLUMN description TEXT
+  Table: Company
+  Rows: 0
+  Short-term Risk: low
+  Risk narrative: Additive nullable column. No risk.
+  ────────────────────────────────────────
+  #: 7
+  Operation: CREATE TYPE "FileType" AS ENUM ('PDF','DOCX')
+  Table: (new type)
+  Rows: —
+  Short-term Risk: low
+  Risk narrative: New enum. Expanding an enum is safe; narrowing it later is the risky operation.
+  ────────────────────────────────────────
+  #: 8
+  Operation: ALTER TABLE Resume ADD COLUMN fileTypeParsed FileType?
+  Table: Resume
+  Rows: 0
+  Short-term Risk: low
+  Risk narrative: Additive nullable column alongside old fileType VARCHAR(50). Old column untouched.
+
+  CONTRACT phase operations (NOT in this migration — separate future migration):
+
+  ┌───────────────────────────────────────────┬───────────┬─────────────────────────────────────────────┬───────────────────────────────┐    
+  │                 Operation                 │   Table   │            Risk when rows exist             │            Recipe             │    
+  ├───────────────────────────────────────────┼───────────┼─────────────────────────────────────────────┼───────────────────────────────┤    
+  │ DROP COLUMN Candidate.address             │ Candidate │ HIGH — irreversible data loss               │ Expand-migrate-contract below │    
+  ├───────────────────────────────────────────┼───────────┼─────────────────────────────────────────────┼───────────────────────────────┤    
+  │ ALTER COLUMN Candidate.addressId SET NOT  │ Candidate │ MEDIUM — fails if any row has NULL          │ Backfill recipe below         │    
+  │ NULL                                      │           │ addressId                                   │                               │    
+  ├───────────────────────────────────────────┼───────────┼─────────────────────────────────────────────┼───────────────────────────────┤    
+  │ DROP COLUMN Position.companyDescription   │ Position  │ HIGH — irreversible data loss               │ Expand-migrate-contract below │    
+  ├───────────────────────────────────────────┼───────────┼─────────────────────────────────────────────┼───────────────────────────────┤    
+  │ DROP COLUMN Resume.fileType               │ Resume    │ HIGH — irreversible data loss               │ Expand-migrate-contract below │    
+  ├───────────────────────────────────────────┼───────────┼─────────────────────────────────────────────┼───────────────────────────────┤    
+  │ RENAME COLUMN Resume.fileTypeParsed TO    │ Resume    │ MEDIUM — breaks any code still reading old  │ Blue/green or maintenance     │    
+  │ fileType                                  │           │ column name                                 │ window                        │    
+  └───────────────────────────────────────────┴───────────┴─────────────────────────────────────────────┴───────────────────────────────┘    
+
+  ---
+  Migration Risk Report B — add_common_query_indexes (Step 2)
+
+  ▎ Status: ALREADY APPLIED (20260427011538). Reviewed for completeness.
+
+  Findings
+
+  ┌─────┬───────────────────────────────────────────────────────┬───────────┬───────────┬──────────────┬───────────────────────────────┐     
+  │  #  │                       Operation                       │   Table   │ Rows at   │ Short-term   │        Risk narrative         │     
+  │     │                                                       │           │   apply   │     Risk     │                               │     
+  ├─────┼───────────────────────────────────────────────────────┼───────────┼───────────┼──────────────┼───────────────────────────────┤     
+  │ 1   │ CREATE INDEX Interview(employeeId, interviewDate)     │ Interview │ 0         │ low          │ Non-unique, non-blocking.     │     
+  │     │                                                       │           │           │              │ Composite btree.              │     
+  ├─────┼───────────────────────────────────────────────────────┼───────────┼───────────┼──────────────┼───────────────────────────────┤     
+  │ 2   │ CREATE INDEX Position(employmentType) WHERE           │ Position  │ 0         │ low          │ Partial index, additive. No   │     
+  │     │ status='OPEN' AND isVisible=true                      │           │           │              │ data affected.                │     
+  ├─────┼───────────────────────────────────────────────────────┼───────────┼───────────┼──────────────┼───────────────────────────────┤     
+  │ 3   │ CREATE INDEX Position(createdAt) WHERE status='OPEN'  │ Position  │ 0         │ low          │ Partial index, additive. No   │     
+  │     │                                                       │           │           │              │ data affected.                │     
+  └─────┴───────────────────────────────────────────────────────┴───────────┴───────────┴──────────────┴───────────────────────────────┘     
+
+  No DROP, no UNIQUE on populated table, no ALTER TYPE, no ALTER COLUMN SET NOT NULL. Verdict: safe (already applied).
+
+  ---
+  Decision Required — per migration
+
+  Migration A (normalize_3nf_expand): reply accept and apply · revise migration first · abort
+
+  Migration B (add_common_query_indexes): already applied — no action needed, acknowledge with ok.
+
+
+❯ create the report for step 2 which I forgot to ask, and revise migration first for this step
+
+State: STEP_3 — Migration A under revision.
+
+  The Step 1 normalization migration is not yet created or applied, so there's nothing to undo — we can revise the SQL freely before writing the file.
+
+  The proposed expand-phase SQL covers:
+
+  1. CREATE TABLE Address + unique + city/country index
+  2. ALTER TABLE Candidate ADD COLUMN addressId INT? + FK + UNIQUE
+  3. ALTER TABLE Company ADD COLUMN description TEXT
+  4. CREATE TYPE FileType AS ENUM ('PDF','DOCX')
+  5. ALTER TABLE Resume ADD COLUMN fileTypeParsed FileType?
+
+  What would you like to revise? For example:
+
+  - Shape of Address — add/remove fields (street, region, postalCode)?
+  - FK behavior — ON DELETE RESTRICT vs SET NULL on Candidate.addressId?
+  - Nullability — keep addressId nullable in expand (recommended) or go straight NOT NULL?
+  - Resume strategy — skip the fileTypeParsed temporary column and do a direct ALTER COLUMN fileType TYPE FileType (safe with 0 rows, risky post-data)?
+  - Scope — drop or defer any of the 5 operations?
+  - Something else?
+
+  Tell me what to change and I'll update the migration SQL before applying.
+
+  
+❯ Explain me in detail what each of the 5 proposed migration steps are going to do and why                                                                           
+                                                                                          
+● Here is a detailed walkthrough of each operation, what it does at the database level, and why it was designed that way.
+                                                                                                                                                                     
+  ---                                                                                                                                                                
+  1. CREATE TABLE Address + indexes                                                                                                                                                                                                                                                                                                       
+  CREATE TABLE "Address" (                                                                                                                                           
+    "id"         SERIAL        PRIMARY KEY,
+    "street"     VARCHAR(200),
+    "city"       VARCHAR(100)  NOT NULL,
+    "region"     VARCHAR(100),
+    "postalCode" VARCHAR(20),
+    "country"    VARCHAR(100)  NOT NULL,
+    "createdAt"  TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"  TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE UNIQUE INDEX "Address_street_city_postalCode_country_key"
+      ON "Address" ("street", "city", "postalCode", "country");
+  CREATE INDEX "Address_city_country_idx"
+      ON "Address" ("city", "country");
+
+  What it does: Creates a brand-new table to hold structured address data. Right now the Candidate table stores an address as a single opaque string like "123 Main  
+  St, New York" in a VARCHAR(100) column — there's no way to query "all candidates in New York" without a full text scan. This creates a proper relational home for  
+  addresses with separate, queryable fields.
+
+  Why structured: city and country are NOT NULL because every real address has at least a city and country. street, region, and postalCode are nullable because some 
+  addresses (e.g., remote workers, international candidates) legitimately omit them.
+
+  Why the unique index: @@unique([street, city, postalCode, country]) — this was your decision (Q5 in Step 1). It prevents duplicate address rows, so if two
+  candidates share the same address (e.g., a household), the database stores one Address row and both Candidate rows point to it via FK. This deduplicates data      
+  rather than repeating it.
+
+  Why the city, country index: The main query filter pattern for addresses is geographic — "find candidates in Barcelona" or "find candidates in Spain." This        
+  composite index makes those filters fast without scanning every row.
+
+  ---
+  2. ALTER TABLE Candidate ADD COLUMN addressId INT + FK + UNIQUE
+
+  ALTER TABLE "Candidate" ADD COLUMN "addressId" INTEGER;
+  ALTER TABLE "Candidate"
+      ADD CONSTRAINT "Candidate_addressId_fkey"
+      FOREIGN KEY ("addressId") REFERENCES "Address"("id")
+      ON UPDATE CASCADE ON DELETE RESTRICT;
+  CREATE UNIQUE INDEX "Candidate_addressId_key" ON "Candidate" ("addressId");
+
+  What it does: Adds the bridge between Candidate and the new Address table. Three sub-operations:
+
+  - ADD COLUMN addressId INTEGER (nullable): Adds a new column to Candidate that will hold the ID of their address row. It is nullable in this expand phase because  
+  existing candidates don't have an Address row yet — making it NOT NULL immediately would block any insert of a candidate before an address is created first. The   
+  old address VARCHAR(100) column is left in place — nothing is dropped here.
+  - ADD CONSTRAINT FK: Tells the database that addressId must always reference a valid row in Address. ON UPDATE CASCADE means if an Address's id changes (rare with 
+  serials, but safe to have), the candidate's addressId updates automatically. ON DELETE RESTRICT means you cannot delete an Address row if a Candidate still points 
+  to it — this protects against orphaning a candidate.
+  - CREATE UNIQUE INDEX on addressId: Enforces the one-to-one relationship you decided in Step 1 (Q1: single address per candidate). Without this, multiple
+  candidates could reference the same Address row, making it many-to-one. With this unique constraint, each Address row can belong to at most one candidate.
+
+  Why nullable now: This is the "expand" half of the expand-migrate-contract pattern. You keep the old address column working while the application is updated to    
+  write to addressId instead. Once every candidate has an addressId populated, a later "contract" migration makes it NOT NULL and drops the old column.
+
+  ---
+  3. ALTER TABLE Company ADD COLUMN description TEXT
+
+  ALTER TABLE "Company" ADD COLUMN "description" TEXT;
+
+  What it does: Adds an optional text field to Company to hold a description of the company.
+
+  Why: This is the 3NF fix for Position.companyDescription. Right now every Position row has its own companyDescription column — which means the same company        
+  description is repeated across every job posting for that company. That is a transitive dependency: Position.companyDescription depends on Position.companyId      
+  (which company it is), not on the position itself. In 3NF, a fact about a company belongs in the Company table. Moving it here means one source of truth: update   
+  the company description in one row, and all positions for that company automatically reflect it.
+
+  Why nullable: The old companyDescription column on Position still exists during this expand phase. The application will keep reading from
+  Position.companyDescription until it is updated to read from Company.description instead. Making it nullable avoids forcing every existing position to immediately 
+  supply a value through the new path.
+
+  Note: Position.companyDescription is NOT dropped in this migration. That happens in the contract migration after the application layer has fully switched over.    
+
+  ---
+  4. CREATE TYPE FileType AS ENUM ('PDF', 'DOCX')
+
+  CREATE TYPE "FileType" AS ENUM ('PDF', 'DOCX');
+
+  What it does: Creates a new PostgreSQL enum type with exactly two valid values: PDF and DOCX.
+
+  Why: Currently Resume.fileType is a VARCHAR(50) that accepts any string. In practice the application only stores MIME types — application/pdf or
+  application/vnd.openxmlformats-officedocument.wordprocessingml.document — enforced by Multer at the HTTP layer. But the database itself accepts anything: a typo,  
+  an empty string, a different MIME type. The enum moves that constraint into the database so it is enforced at every write path, not just the web server.
+
+  Why a separate step from changing the column: You cannot apply a new enum type and alter the column in the same statement. The type must exist first before any    
+  column can reference it. This step purely creates the type; the next step uses it.
+
+  ---
+  5. ALTER TABLE Resume ADD COLUMN fileTypeParsed FileType?
+
+  ALTER TABLE "Resume" ADD COLUMN "fileTypeParsed" "FileType";
+
+  What it does: Adds a second file-type column to Resume using the new enum type, alongside the existing fileType VARCHAR(50). The old column is left untouched.     
+
+  Why a new column instead of directly changing the existing one: This is the expand step of expand-migrate-contract for a type change. Directly running ALTER COLUMN
+   fileType TYPE "FileType" would work right now because the table is empty — but if any VARCHAR value couldn't be cast to the enum (e.g., a full MIME string like   
+  application/pdf vs PDF), it would fail on a populated table with no recovery path. The safer pattern is:
+
+  1. Expand: add fileTypeParsed "FileType" (nullable) — this migration
+  2. Migrate: backfill fileTypeParsed from fileType using an explicit mapping ('application/pdf' → PDF, 'application/vnd...' → DOCX), then update the application to 
+  write to fileTypeParsed
+  3. Contract: DROP COLUMN fileType, RENAME COLUMN fileTypeParsed TO fileType
+
+  With 0 rows today this is purely forward-looking discipline — it costs nothing now and protects against data loss the moment real resumes are uploaded.
+
+  ---
+  Summary
+
+  ┌──────────────────────────┬───────────────────┬────────────────────────────────────────────┬──────────────────────────────────────┐
+  │           Step           │ Risk now (0 rows) │             What gets dropped              │    When is the old thing removed     │
+  ├──────────────────────────┼───────────────────┼────────────────────────────────────────────┼──────────────────────────────────────┤
+  │ 1. CREATE TABLE Address  │ None              │ Nothing                                    │ N/A — new table                      │
+  ├──────────────────────────┼───────────────────┼────────────────────────────────────────────┼──────────────────────────────────────┤
+  │ 2. Candidate.addressId   │ None              │ Nothing (address VARCHAR kept)             │ Contract migration after app cutover │
+  ├──────────────────────────┼───────────────────┼────────────────────────────────────────────┼──────────────────────────────────────┤
+  │ 3. Company.description   │ None              │ Nothing (Position.companyDescription kept) │ Contract migration after app cutover │
+  ├──────────────────────────┼───────────────────┼────────────────────────────────────────────┼──────────────────────────────────────┤
+  │ 4. CREATE TYPE FileType  │ None              │ Nothing                                    │ N/A — new type                       │
+  ├──────────────────────────┼───────────────────┼────────────────────────────────────────────┼──────────────────────────────────────┤
+  │ 5. Resume.fileTypeParsed │ None              │ Nothing (fileType VARCHAR kept)            │ Contract migration after backfill    │
+  └──────────────────────────┴───────────────────┴────────────────────────────────────────────┴──────────────────────────────────────┘
+
+  The entire expand migration is additive — it only adds new things. Nothing is dropped, renamed, or modified until the application layer has been updated and       
+  validated. This is why the verdict is safe even if rows existed.
+
+  ---
+  State: STEP_3 — migration under revision. What would you like to change?
+
+
+❯ Nothing.I understand there are 8 operations. all with low risk. Accept and apply migration A (normalize-3nf-expand)
+
+● All 6 artifacts confirmed in the live database.                                                                                                                    
+                                                                                                                                                                       ---
+  Migration A — Applied ✅                                                                                                                                                                                                                                                                                                                
+  ┌───────────────────────┬──────────────────────────┬────────────────────────┐                                                                                        │       Artifact        │           Type           │         Status         │                                                                                        ├───────────────────────┼──────────────────────────┼────────────────────────┤                                                                                      
+  │ Address table         │ new table                │ ✅ live                │
+  ├───────────────────────┼──────────────────────────┼────────────────────────┤
+  │ Candidate.addressId   │ nullable FK column       │ ✅ live                │
+  ├───────────────────────┼──────────────────────────┼────────────────────────┤
+  │ Candidate.address     │ legacy VARCHAR(100)      │ ✅ kept (expand phase) │
+  ├───────────────────────┼──────────────────────────┼────────────────────────┤
+  │ Company.description   │ nullable TEXT column     │ ✅ live                │
+  ├───────────────────────┼──────────────────────────┼────────────────────────┤
+  │ FileType              │ new ENUM type            │ ✅ live                │
+  ├───────────────────────┼──────────────────────────┼────────────────────────┤
+  │ Resume.fileTypeParsed │ nullable FileType column │ ✅ live                │
+  └───────────────────────┴──────────────────────────┴────────────────────────┘
+
+  Migration B (add_common_query_indexes) — already applied ✅
+
+  Prisma Client regenerated (v5.19.0). Note: a major version upgrade to v7.8.0 is available — follow the guide at https://pris.ly/d/major-version-upgrade when ready 
+  (out of scope for this workflow).
+
+  ---
+  Adjacent-file reminders (from docs/migration-checklist.md)
+
+  These files must be updated before the new fields are usable end-to-end:
+
+  - backend/src/domain/models/Candidate.ts — add addressId, addressRecord fields; read Address via relation
+  - backend/src/domain/models/Company.ts — add description field
+  - backend/src/domain/models/Resume.ts — add fileTypeParsed FileType? field; import FileType enum
+  - backend/src/application/validator.ts — validate addressId as required at intake (per Q2 decision: NOT NULL in contract phase)
+  - backend/api-spec.yaml — document Address entity; add FileType enum schema; mark Candidate.addressId as required
+  - Contract migration — to be created once application layer is fully cut over
+
+  ---
+  State: STEP_3_REVIEW
+
+    Reply step 4 to proceed to report queries and the 1 000-row seed.
+
+● Confirmed. All 8 operations map directly to lines in the applied migration:                                                                                        
+  
+  ┌─────┬─────────────────────────────────────────────────────────────┬──────────────────────┐                                                                       
+  │  #  │                    Operation from report                    │ Migration SQL (line) │                                                                         ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤                                                                       
+  │ 1   │ CREATE TABLE Address                                        │ Lines 13–24          │                                                                       
+  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 2   │ CREATE UNIQUE INDEX Address(street,city,postalCode,country) │ Lines 27–28          │
+  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 3   │ ALTER TABLE Candidate ADD COLUMN addressId INT NULLABLE     │ Line 35              │
+  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 4   │ ADD CONSTRAINT Candidate_addressId_fkey FK → Address        │ Lines 37–40          │
+  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 5   │ CREATE UNIQUE INDEX Candidate(addressId)                    │ Lines 43–44          │
+  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 6   │ ALTER TABLE Company ADD COLUMN description TEXT             │ Line 47              │
+  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 7   │ CREATE TYPE "FileType" AS ENUM ('PDF','DOCX')               │ Line 50              │
+  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 8   │ ALTER TABLE Resume ADD COLUMN fileTypeParsed FileType?      │ Line 53              │
+  └─────┴─────────────────────────────────────────────────────────────┴──────────────────────┘
+
+  The contract phase operations (DROP COLUMN, SET NOT NULL, RENAME) are documented as comments at the top of the file (lines 5–10) but intentionally not executed —  
+  they belong to a separate future migration after the application layer cuts over.
+
+  State: STEP_3_REVIEW — reply step 4 to proceed to report queries and the 1 000-row seed.
