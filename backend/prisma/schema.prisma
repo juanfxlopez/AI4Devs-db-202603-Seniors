@@ -227,6 +227,10 @@ model Position {
   @@index([companyId, status])
 }
 
+// NOTE: a partial index on active statuses exists in raw SQL (not expressible in Prisma schema):
+//   "Application_active_status_idx" ON "Application"(status)
+//   WHERE status NOT IN ('HIRED','REJECTED','WITHDRAWN')
+//   → Migration 20260428120000_optimize_r4_stalled_partial_idx
 model Application {
   id              Int         @id @default(autoincrement())
   positionId      Int
