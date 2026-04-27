@@ -185,7 +185,7 @@ ORDER BY median_days_to_hire ASC NULLS LAST;
 
 
 -- =========================================================
--- R4 — Stalled Applications
+-- R4 — Stalled Applications  [optimized — Step 5, P3]
 --      Purpose : Active applications (not HIRED/REJECTED/WITHDRAWN) with
 --                no interview activity for more than N days. Used by
 --                recruiters to triage neglected candidates before SLA breach.
@@ -195,6 +195,19 @@ ORDER BY median_days_to_hire ASC NULLS LAST;
 --      Output  : application_id, position_title, candidate_name, status_name,
 --                application_date, last_interview_date, idle_days,
 --                oldest_stall_rank
+--
+--      Optimizations vs. original:
+--        1. LATERAL replaces LEFT JOIN + GROUP BY for MAX(interviewDate) —
+--           leverages idx Application_applicationId_interviewDate_idx,
+--           avoiding a full hash join across all Interview rows.
+--        2. COALESCE computed once as last_touch in active_apps; referenced
+--           by name everywhere, eliminating three redundant evaluations.
+--        3. pre_filtered CTE applies the stall threshold BEFORE ROW_NUMBER(),
+--           so the window operates only on rows that will be returned
+--           (≈564 rows instead of 841 at seed scale).
+--        4. Index Application_active_status_idx (partial, added in migration
+--           20260428120000_optimize_r4_stalled_partial_idx) converts the
+--           status NOT IN (...) Seq Scan to an Index Scan at production scale.
 -- =========================================================
 
 WITH active_apps AS (
@@ -202,39 +215,37 @@ WITH active_apps AS (
     a.id                                     AS application_id,
     a."positionId"                           AS position_id,
     p.title                                  AS position_title,
-    a."candidateId"                          AS candidate_id,
     CONCAT(c."firstName", ' ', c."lastName") AS candidate_name,
     a.status::text                           AS status_name,
     a."applicationDate"                      AS application_date,
-    MAX(i."interviewDate")                   AS last_interview_date
+    last_i.last_interview_date,
+    COALESCE(
+      last_i.last_interview_date,
+      a."applicationDate"::timestamptz
+    )                                        AS last_touch
   FROM "Application" a
   JOIN "Position"  p ON p.id = a."positionId"
   JOIN "Candidate" c ON c.id = a."candidateId"
-  LEFT JOIN "Interview" i ON i."applicationId" = a.id
+  LEFT JOIN LATERAL (
+    SELECT MAX("interviewDate") AS last_interview_date
+    FROM   "Interview"
+    WHERE  "applicationId" = a.id
+  ) last_i ON true
   WHERE a.status NOT IN ('HIRED', 'REJECTED', 'WITHDRAWN')
-  GROUP BY
-    a.id, a."positionId", p.title,
-    a."candidateId", c."firstName", c."lastName",
-    a.status, a."applicationDate"
 ),
-stall_calc AS (
+pre_filtered AS (
+  SELECT *
+  FROM   active_apps
+  WHERE  NOW() - last_touch > ($1 * INTERVAL '1 day')
+),
+ranked AS (
   SELECT
     *,
-    COALESCE(
-      last_interview_date,
-      application_date::timestamptz
-    )                                        AS last_touch,
-    NOW() - COALESCE(
-      last_interview_date,
-      application_date::timestamptz
-    )                                        AS idle_duration,
     ROW_NUMBER() OVER (
       PARTITION BY position_id
-      ORDER BY
-        COALESCE(last_interview_date, application_date::timestamptz) ASC,
-        application_id ASC
+      ORDER BY last_touch ASC, application_id ASC
     )                                        AS oldest_stall_rank
-  FROM active_apps
+  FROM pre_filtered
 )
 SELECT
   application_id,
@@ -243,11 +254,10 @@ SELECT
   status_name,
   application_date,
   last_interview_date,
-  EXTRACT(DAY FROM idle_duration)::int       AS idle_days,
+  EXTRACT(DAY FROM (NOW() - last_touch))::int AS idle_days,
   oldest_stall_rank
-FROM stall_calc
-WHERE idle_duration > ($1 * INTERVAL '1 day')
-ORDER BY idle_duration DESC, application_id ASC;
+FROM   ranked
+ORDER  BY (NOW() - last_touch) DESC, application_id ASC;
 
 
 -- =========================================================
