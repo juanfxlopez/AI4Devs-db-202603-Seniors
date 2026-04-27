@@ -236,4 +236,5 @@ model Interview {
   @@index([interviewStepId])
   @@index([employeeId])
   @@index([applicationId, interviewDate])
+  @@index([employeeId, interviewDate])
 }
