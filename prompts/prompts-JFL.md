@@ -341,127 +341,80 @@ style {
 
 ## Follow-up prompts
 
+### FP-3.1
 ❯ Q1: ERD (not null) Q2: NUMERIC(10,2) Q3:TIMESTAMP Q4:YES Q5:enum
 
 ● Decisions locked in:
 
-  ┌─────┬────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  
-  │  #  │                                                  Decision                                                  │  
-  ├─────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
-  │ Q1  │ CANDIDATE.phone and CANDIDATE.address → NOT NULL (ERD wins; existing nullable columns will need            │  
-  │     │ alteration)                                                                                                │  
-  ├─────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
-  │ Q2  │ NUMERIC(10,2) for salary_min / salary_max                                                                  │  
-  ├─────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
-  │ Q3  │ TIMESTAMP for INTERVIEW.interview_date                                                                     │  
-  ├─────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
-  │ Q4  │ Enable pgvector extension as part of migration                                                             │  
-  ├─────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
-  │ Q5  │ Prisma enum for POSITION.status and APPLICATION.status                                                     │  
-  └─────┴────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  
+| # | Decision |
+| --- | --- |
+| Q1 | CANDIDATE.phone and CANDIDATE.address → NOT NULL (ERD wins; existing nullable columns will need alteration) |
+| Q2 | NUMERIC(10,2) for salary_min / salary_max |
+| Q3 | TIMESTAMP for INTERVIEW.interview_date |
+| Q4 | Enable pgvector extension as part of migration |
+| Q5 | Prisma enum for POSITION.status and APPLICATION.status |
 
   State is now AWAITING_START with all questions resolved.
 
   Reply step 1 to begin the ERD → SQL DDL conversion.
 
+### FP-3.2
 ❯ step 1
 
 
-  ┌─────┬────────────────────────────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────┐   
-  │  #  │                     Topic                      │                                          Decision                                          │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N1  │ All string fields without length hints         │ → TEXT; Step 2 may cap to VARCHAR(n) for consistency                                       │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N2  │ interview_type.description                     │ → nullable; a type can be named without a description                                      │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N3  │ position table name                            │ Reserved SQL function name — Step 2 should recommend quoting or renaming to job_position   │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N4  │ POSITION ‖--‖ INTERVIEW_FLOW (1:1)             │ → UNIQUE on position.interview_flow_id per ERD cardinality; flag for Step 2 if flows       │   
-  │     │                                                │ should be reusable                                                                         │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N5  │ position.status / application.status           │ → TEXT NOT NULL now (faithful); enum in Step 2 per Q5                                      │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N6  │ position.salary_min/max                        │ → NUMERIC(10,2) per Q2; nullable (salary may not be published)                             │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N7  │ position.location, employment_type, optional   │ → nullable                                                                                 │   
-  │     │ text fields                                    │                                                                                            │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N8  │ interview_step FK to interview_flow            │ → ON DELETE CASCADE (steps owned by flow — clear ownership)                                │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N9  │ CANDIDATE entity                               │ Already exists as PascalCase "Candidate" — this block is reference-only; Step 2 emits      │   
-  │     │                                                │ ALTER instead of CREATE                                                                    │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N10 │ candidate.phone / candidate.address            │ → NOT NULL per Q1; current live columns are nullable → ALTER COLUMN … SET NOT NULL in Step │   
-  │     │                                                │  3                                                                                         │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N11 │ interview.interview_date                       │ → TIMESTAMP per Q3; Step 2 will recommend TIMESTAMPTZ for multi-tz                         │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N12 │ interview.result / score / notes               │ → nullable (unknown until after interview)                                                 │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N13 │ INTERVIEW ‖--‖ INTERVIEW_STEP (1:1 per ERD)    │ UNIQUE NOT applied — many interviews across apps can share a step; Step 2 should clarify   │   
-  │     │                                                │ per-application uniqueness intent                                                          │   
-  ├─────┼────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ N14 │ interview FK to application                    │ → ON DELETE CASCADE (interviews owned by application)                                      │   
-  └─────┴────────────────────────────────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────┘  
+| # | Topic | Decision |
+| --- | --- | --- |
+| N1 | All string fields without length hints | → TEXT; Step 2 may cap to VARCHAR(n) for consistency |
+| N2 | interview_type.description | → nullable; a type can be named without a description |
+| N3 | position table name | Reserved SQL function name — Step 2 should recommend quoting or renaming to job_position |
+| N4 | POSITION ‖--‖ INTERVIEW_FLOW (1:1) | → UNIQUE on position.interview_flow_id per ERD cardinality; flag for Step 2 if flows should be reusable |
+| N5 | position.status / application.status | → TEXT NOT NULL now (faithful); enum in Step 2 per Q5 |
+| N6 | position.salary_min/max | → NUMERIC(10,2) per Q2; nullable (salary may not be published) |
+| N7 | position.location, employment_type, optional text fields | → nullable |
+| N8 | interview_step FK to interview_flow | → ON DELETE CASCADE (steps owned by flow — clear ownership) |
+| N9 | CANDIDATE entity | Already exists as PascalCase "Candidate" — this block is reference-only; Step 2 emits ALTER instead of CREATE |
+| N10 | candidate.phone / candidate.address | → NOT NULL per Q1; current live columns are nullable → ALTER COLUMN … SET NOT NULL in Step 3 |
+| N11 | interview.interview_date | → TIMESTAMP per Q3; Step 2 will recommend TIMESTAMPTZ for multi-tz |
+| N12 | interview.result / score / notes | → nullable (unknown until after interview) |
+| N13 | INTERVIEW ‖--‖ INTERVIEW_STEP (1:1 per ERD) | UNIQUE NOT applied — many interviews across apps can share a step; Step 2 should clarify per-application uniqueness intent |
+| N14 | interview FK to application | → ON DELETE CASCADE (interviews owned by application) |
 
 ### FP-3.3
 
-  ❯ Q1: Option A  - PascalCase. Q2: Confirmed. Q3. Staged plan. Q4. yes Q5. Recommend here, but I think not for now. Q6. Module level B - new                 PrismaClient(). Q7: yes multi-tz. Q8. Yes 1:1 unique                                                                                                    
-                                                       
-● All decisions locked. Summary before Step 3:   
+  ❯ Q1: Option A  - PascalCase. Q2: Confirmed. Q3. Staged plan. Q4. yes Q5. Recommend here, but I think not for now. Q6. Module level B - new PrismaClient(). Q7: yes multi-tz. Q8. Yes 1:1 unique
+● All decisions locked. Summary before Step 3:
 
-  ┌─────┬───────────────────────────────────────────────────────────────────────┐                                                                           │  #  │                               Decision                                │
-  ├─────┼───────────────────────────────────────────────────────────────────────┤                                                                         
-  │ Q1  │ PascalCase for all new tables (Company, Employee, Position, …)        │
-  ├─────┼───────────────────────────────────────────────────────────────────────┤
-  │ Q2  │ Enum values confirmed as proposed                                     │
-  ├─────┼───────────────────────────────────────────────────────────────────────┤
-  │ Q3  │ Staged plan — 5 migrations                                            │
-  ├─────┼───────────────────────────────────────────────────────────────────────┤
-  │ Q4  │ Yes — createdAt/updatedAt TIMESTAMPTZ DEFAULT now() on all new tables │
-  ├─────┼───────────────────────────────────────────────────────────────────────┤
-  │ Q5  │ No soft-delete for now                                                │
-  ├─────┼───────────────────────────────────────────────────────────────────────┤
-  │ Q6  │ Module-level new PrismaClient() in domain/models/                     │
-  ├─────┼───────────────────────────────────────────────────────────────────────┤
-  │ Q7  │ TIMESTAMPTZ for Interview.interviewDate (multi-tz)                    │
-  ├─────┼───────────────────────────────────────────────────────────────────────┤
-  │ Q8  │ 1:1 UNIQUE confirmed — Position.interviewFlowId gets @unique          │
-  └─────┴───────────────────────────────────────────────────────────────────────┘
+| # | Decision |
+| --- | --- |
+| Q1 | PascalCase for all new tables (Company, Employee, Position, …) |
+| Q2 | Enum values confirmed as proposed |
+| Q3 | Staged plan — 5 migrations |
+| Q4 | Yes — createdAt/updatedAt TIMESTAMPTZ DEFAULT now() on all new tables |
+| Q5 | No soft-delete for now |
+| Q6 | Module-level new PrismaClient() in domain/models/ |
+| Q7 | TIMESTAMPTZ for Interview.interviewDate (multi-tz) |
+| Q8 | 1:1 UNIQUE confirmed — Position.interviewFlowId gets @unique |
 
 State → STEP_3. All choices already bound from Step 2 review. Presenting final pre-execution checklist for confirmation.
 
-  ---                                                                                                                                                       Migration Checklist — Confirmed Picks
-                                                                                                                                                          
-  ┌─────┬─────────────────────────┬───────────────────────────────────────────────────┬────────┐                                                          
-  │  #  │          Topic          │                       Pick                        │ Status │
-  ├─────┼─────────────────────────┼───────────────────────────────────────────────────┼────────┤
-  │ 1   │ Casing convention       │ A — PascalCase for all tables                     │ ✅     │
-  ├─────┼─────────────────────────┼───────────────────────────────────────────────────┼────────┤
-  │ 2   │ Schema additions        │ Full set — all 8 ERD entities                     │ ✅     │
-  ├─────┼─────────────────────────┼───────────────────────────────────────────────────┼────────┤
-  │ 3   │ Position.status         │ ENUM PositionStatus                               │ ✅     │
-  ├─────┼─────────────────────────┼───────────────────────────────────────────────────┼────────┤
-  │ 4   │ Employee.role           │ ENUM EmployeeRole                                 │ ✅     │
-  ├─────┼─────────────────────────┼───────────────────────────────────────────────────┼────────┤
-  │ 5   │ Interview.result        │ ENUM InterviewResult                              │ ✅     │
-  ├─────┼─────────────────────────┼───────────────────────────────────────────────────┼────────┤
-  │ 6   │ Position.employmentType │ ENUM EmploymentType                               │ ✅     │
-  ├─────┼─────────────────────────┼───────────────────────────────────────────────────┼────────┤
-  │ 7   │ Application.status      │ ENUM ApplicationStatus                            │ ✅     │
-  ├─────┼─────────────────────────┼───────────────────────────────────────────────────┼────────┤
-  │ 8   │ Index set               │ Apply all from §3                                 │ ✅     │
-  ├─────┼─────────────────────────┼───────────────────────────────────────────────────┼────────┤
-  │ 9   │ Timestamps              │ New tables only — createdAt/updatedAt TIMESTAMPTZ │ ✅     │
-  ├─────┼─────────────────────────┼───────────────────────────────────────────────────┼────────┤
-  │ 10  │ Soft-delete             │ None — deferred                                   │ ✅     │
-  ├─────┼─────────────────────────┼───────────────────────────────────────────────────┼────────┤
-  │ 11  │ pgvector                │ Adopt now — extension only, no embedding columns  │ ✅     │
-  ├─────┼─────────────────────────┼───────────────────────────────────────────────────┼────────┤
-  │ 12  │ Migration granularity   │ Staged — 5 migrations, one at a time              │ ✅     │
-  ├─────┼─────────────────────────┼───────────────────────────────────────────────────┼────────┤
-  │ 13  │ Prisma access pattern   │ Module-level new PrismaClient() in domain/models/ │ ✅     │
-  └─────┴─────────────────────────┴───────────────────────────────────────────────────┴────────┘
+  ---
+  Migration Checklist — Confirmed Picks
+
+| # | Topic | Pick | Status |
+| --- | --- | --- | --- |
+| 1 | Casing convention | A — PascalCase for all tables | ✅ |
+| 2 | Schema additions | Full set — all 8 ERD entities | ✅ |
+| 3 | Position.status | ENUM PositionStatus | ✅ |
+| 4 | Employee.role | ENUM EmployeeRole | ✅ |
+| 5 | Interview.result | ENUM InterviewResult | ✅ |
+| 6 | Position.employmentType | ENUM EmploymentType | ✅ |
+| 7 | Application.status | ENUM ApplicationStatus | ✅ |
+| 8 | Index set | Apply all from §3 | ✅ |
+| 9 | Timestamps | New tables only — createdAt/updatedAt TIMESTAMPTZ | ✅ |
+| 10 | Soft-delete | None — deferred | ✅ |
+| 11 | pgvector | Adopt now — extension only, no embedding columns | ✅ |
+| 12 | Migration granularity | Staged — 5 migrations, one at a time | ✅ |
+| 13 | Prisma access pattern | Module-level new PrismaClient() in domain/models/ | ✅ |
 
     ---
   Execution plan (5 migrations in order)
@@ -476,27 +429,23 @@ State → STEP_3. All choices already bound from Step 2 review. Presenting final
   ⚠️ Windows pre-flight: Before typing execute, stop any running backend (npm run dev / npm start) to avoid the query_engine-windows.dll.node lock during 
   prisma generate.
 
-  ● ---                                                                                                                                                     
-  Migration 1 diff — add_ats_core_entities                                                                                                                                                                                                                                                                            schema.prisma changes:                                                                                                                                    - Candidate — added applications Application[] back-relation                                                                                            
-  - 8 new models: Company, InterviewFlow, InterviewType, Employee, InterviewStep, Position, Application, Interview                                          - All new models have createdAt/updatedAt TIMESTAMPTZ(6)                                                                                                                                                                                                                                                            Generated SQL (migration.sql) — key statements:                                                                                                                                                                                                                                                                   
-  ┌─────────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │    Statement    │                                                      Detail                                                       │
-  ├─────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ CREATE TABLE ×8 │ Company, InterviewFlow, InterviewType, Employee, InterviewStep, Position, Application, Interview                  │
-  ├─────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ UNIQUE INDEX    │ Position_interviewFlowId_key (1:1 confirmed)                                                                      │
-  ├─────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ FK ×10          │ All foreign keys with ON DELETE CASCADE for InterviewStep→Flow and Interview→Application; RESTRICT for all others │
-  ├─────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ CHECK           │ Position.salaryMin <= salaryMax (nulls allowed)                                                                   │
-  ├─────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ CHECK           │ Interview.score BETWEEN 0 AND 100 (null allowed)                                                                  │
-  └─────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+   ---
+    Migration 1 diff — add_ats_core_entities 
+    prisma changes:
+    Candidate — added applications Application[] back-relation - 8 new models: Company, InterviewFlow, InterviewType, Employee, InterviewStep, Position, Application, Interview - All new models have createdAt/updatedAt (6) Generated SQL (migration.sql) — key statements:
+
+| Statement | Detail |
+| --- | --- |
+| CREATE TABLE ×8 | Company, InterviewFlow, InterviewType, Employee, InterviewStep, Position, Application, Interview |
+| UNIQUE INDEX | Position_interviewFlowId_key (1:1 confirmed) |
+| FK ×10 | All foreign keys with ON DELETE CASCADE for InterviewStep→Flow and Interview→Application; RESTRICT for all others |
+| CHECK | Position.salaryMin <= salaryMax (nulls allowed) |
+| CHECK | Interview.score BETWEEN 0 AND 100 (null allowed) |
 
   Apply migration add_ats_core_entities? (yes / revise / abort)
-    
 
-❯yes                                                                                                                                                     
+### FP-3.4
+❯yes
 
 SQL that will run:
   ALTER TABLE "Candidate" ALTER COLUMN "phone"   SET NOT NULL;
@@ -506,9 +455,9 @@ SQL that will run:
 
   Apply migration alter_candidate_phone_address_not_null? (yes / revise / abort)
 
-※ recap: DB expansion in progress: 2 of 5 staged migrations applied. Next: confirm "yes" to apply migration 2, which makes Candidate.phone and Candidate.address NOT     
-  NULL. (disable recaps in /config)
+※ recap: DB expansion in progress: 2 of 5 staged migrations applied. Next: confirm "yes" to apply migration 2, which makes Candidate.phone and Candidate.address NOT NULL. (disable recaps in /config)
 
+### FP-3.5
 ❯ yes
 
  ---
@@ -516,32 +465,25 @@ SQL that will run:
 
   schema.prisma diff — @@index and @@unique directives added to existing and new models:
 
-  ┌────────────────┬──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │     Model      │                                                       Addition                                                       │
-  ├────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Education      │ @@index([candidateId])                                                                                               │
-  ├────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ WorkExperience │ @@index([candidateId])                                                                                               │
-  ├────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Resume         │ @@index([candidateId])                                                                                               │
-  ├────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Employee       │ @@index([companyId]), @@unique([email, companyId])                                                                   │
-  ├────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ InterviewStep  │ @@index([interviewTypeId]), @@unique([interviewFlowId, orderIndex])                                                  │
-  ├────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Position       │ @@index([companyId]), @@index([companyId, status])                                                                   │
-  ├────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Application    │ @@index([positionId]), @@index([candidateId]), @@index([positionId, status]), @@index([candidateId, status])         │
-  ├────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Interview      │ @@index([applicationId]), @@index([interviewStepId]), @@index([employeeId]), @@index([applicationId, interviewDate]) │
-  └────────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+| Model | Addition |
+| --- | --- |
+| Education | @@index([candidateId]) |
+| WorkExperience | @@index([candidateId]) |
+| Resume | @@index([candidateId]) |
+| Employee | @@index([companyId]), @@unique([email, companyId]) |
+| InterviewStep | @@index([interviewTypeId]), @@unique([interviewFlowId, orderIndex]) |
+| Position | @@index([companyId]), @@index([companyId, status]) |
+| Application | @@index([positionId]), @@index([candidateId]), @@index([positionId, status]), @@index([candidateId, status]) |
+| Interview | @@index([applicationId]), @@index([interviewStepId]), @@index([employeeId]), @@index([applicationId, interviewDate]) |
 
   Apply migration add_indexes? (yes / revise / abort)
 
+### FP-3.6
 ❯ yes
 
-Migration 4 of 5: add_enums                                                                                                                                                                                                                                                                                                                             
-  schema.prisma diff — 5 enums introduced, 5 String fields replaced:                                                                                                                                                                                                                                                                                        + enum PositionStatus   { DRAFT OPEN PAUSED CLOSED CANCELLED }                                                                                                             
+Migration 4 of 5: add_enums
+schema.prisma diff — 5 enums introduced, 5 String fields replaced:
++ enum PositionStatus   { DRAFT OPEN PAUSED CLOSED CANCELLED }
   + enum ApplicationStatus{ PENDING SCREENING INTERVIEW OFFER HIRED REJECTED WITHDRAWN }
   + enum EmployeeRole     { RECRUITER HIRING_MANAGER INTERVIEWER ADMIN }
   + enum InterviewResult  { PENDING PASS FAIL ON_HOLD }
@@ -558,35 +500,28 @@ Migration 4 of 5: add_enums
   - ALTER COLUMN … TYPE <enum> USING …::text::<enum> for each affected column
 
   Apply migration add_enums? (yes / revise / abort)
-  
+
+### FP-3.7
 ❯yes 
 
- ---                                                                                                                                                                        
-  Migration 5 of 5: enable_pgvector                                                                                                                                             
-  SQL that will run:                                                                                                                                                           CREATE EXTENSION IF NOT EXISTS vector;                                                                                                                                                                                                                                                                                                                    No schema.prisma change needed (no vector columns yet — extension only per Q4 decision).                                                                                                                                                                                                                                                                
-  Apply migration enable_pgvector? (yes / revise / abort)
- 
+ ---
+  Migration 5 of 5: enable_pgvector 
+  SQL that will run: CREATE EXTENSION IF NOT EXISTS vector; No schema prisma change needed (no vector columns yet — extension only per Q4 decision).
 
+### FP-3.8
 ❯ yes
 
-  Completion Summary                                                                                                                                                                                                                                                                                                                                      
+  Completion Summary
   Migrations applied (6 total in _prisma_migrations)
 
-  ┌─────┬───────────────────────────────────────────────────────┬───────────────────────────────────────────┐
-  │  #  │                       Migration                       │                  Result                   │
-  ├─────┼───────────────────────────────────────────────────────┼───────────────────────────────────────────┤
-  │ 0   │ 20260426182554_init                                   │ pre-existing                              │
-  ├─────┼───────────────────────────────────────────────────────┼───────────────────────────────────────────┤
-  │ 1   │ 20260426221733_add_ats_core_entities                  │ ✅ 8 new tables + FKs + CHECK constraints │
-  ├─────┼───────────────────────────────────────────────────────┼───────────────────────────────────────────┤
-  │ 2   │ 20260426222506_alter_candidate_phone_address_not_null │ ✅ phone + address NOT NULL               │
-  ├─────┼───────────────────────────────────────────────────────┼───────────────────────────────────────────┤
-  │ 3   │ 20260426223310_add_indexes                            │ ✅ 17 indexes (FK + composite + unique)   │
-  ├─────┼───────────────────────────────────────────────────────┼───────────────────────────────────────────┤
-  │ 4   │ 20260426223656_add_enums                              │ ✅ 5 enums, 5 columns converted           │
-  ├─────┼───────────────────────────────────────────────────────┼───────────────────────────────────────────┤
-  │ 5   │ 20260426224150_enable_pgvector                        │ ✅ vector 0.8.2 enabled                   │
-  └─────┴───────────────────────────────────────────────────────┴───────────────────────────────────────────┘
+| # | Migration | Result |
+| --- | --- | --- |
+| 0 | 20260426182554_init | pre-existing |
+| 1 | 20260426221733_add_ats_core_entities | ✅ 8 new tables + FKs + CHECK constraints |
+| 2 | 20260426222506_alter_candidate_phone_address_not_null | ✅ phone + address NOT NULL |
+| 3 | 20260426223310_add_indexes | ✅ 17 indexes (FK + composite + unique) |
+| 4 | 20260426223656_add_enums | ✅ 5 enums, 5 columns converted |
+| 5 | 20260426224150_enable_pgvector | ✅ vector 0.8.2 enabled |
 
   Live DB now has 12 user tables
 
@@ -1140,85 +1075,57 @@ style {
 
 ## Follow-up prompts
 
-❯ Q1: Single Address per Candidate. Q2: Candidates must provide and address at intake. Q3. Promote in this migration. Q4: Promote    in this migration. Q5. yes   
+### FP-5.1
+❯ Q1: Single Address per Candidate. Q2: Candidates must provide and address at intake. Q3. Promote in this migration. Q4: Promote in this migration. Q5. yes   
 
   ---
-  Step 1 — Decisions Locked                                                                                                           
-  ┌─────┬─────────────────────────────┬────────────────────────────────────────────────────────┐                                   
-  │  #  │          Question           │                        Decision                        │
-  ├─────┼─────────────────────────────┼────────────────────────────────────────────────────────┤
-  │ Q1  │ Address cardinality         │ One-to-one: Candidate.addressId Int @unique (NOT NULL) │
-  ├─────┼─────────────────────────────┼────────────────────────────────────────────────────────┤
-  │ Q2  │ Nullability                 │ NOT NULL — address required at intake                  │
-  ├─────┼─────────────────────────────┼────────────────────────────────────────────────────────┤
-  │ Q3  │ Position.companyDescription │ Promote to Company.description TEXT? in this migration │
-  ├─────┼─────────────────────────────┼────────────────────────────────────────────────────────┤
-  │ Q4  │ Resume.fileType             │ Promote to FileType enum (PDF, DOCX) in this migration │
-  ├─────┼─────────────────────────────┼────────────────────────────────────────────────────────┤
-  │ Q5  │ Address dedup constraint    │ @@unique([street, city, postalCode, country])          │
-  └─────┴─────────────────────────────┴────────────────────────────────────────────────────────┘
+  Step 1 — Decisions Locked
+| # | Question | Decision |
+| --- | --- | --- |
+| Q1 | Address cardinality | One-to-one: Candidate.addressId Int @unique (NOT NULL) |
+| Q2 | Nullability | NOT NULL — address required at intake |
+| Q3 | Position.companyDescription | Promote to Company.description TEXT? in this migration |
+| Q4 | Resume.fileType | Promote to FileType enum (PDF, DOCX) in this migration |
+| Q5 | Address dedup constraint | @@unique([street, city, postalCode, country]) |
 
   ---
 
   DDL Impact Summary (for Step 3 risk review)
 
-  ┌────────────────────────────────────────────────────────────┬───────────┬───────────────────────────────────────────────────┐   
-  │                         Operation                          │   Table   │                 Risk with 0 rows                  │   
-  ├────────────────────────────────────────────────────────────┼───────────┼───────────────────────────────────────────────────┤   
-  │ CREATE TABLE Address                                       │ new       │ none                                              │   
-  ├────────────────────────────────────────────────────────────┼───────────┼───────────────────────────────────────────────────┤   
-  │ ALTER TABLE Candidate ADD COLUMN addressId INT NOT NULL    │ Candidate │ safe — 0 rows                                     │   
-  │ UNIQUE                                                     │           │                                                   │   
-  ├────────────────────────────────────────────────────────────┼───────────┼───────────────────────────────────────────────────┤   
-  │ ALTER TABLE Candidate DROP COLUMN address                  │ Candidate │ destructive but safe — 0 rows; irreversible       │   
-  │                                                            │           │ post-data                                         │   
-  ├────────────────────────────────────────────────────────────┼───────────┼───────────────────────────────────────────────────┤   
-  │ ALTER TABLE Company ADD COLUMN description TEXT            │ Company   │ none                                              │   
-  ├────────────────────────────────────────────────────────────┼───────────┼───────────────────────────────────────────────────┤   
-  │ ALTER TABLE Position DROP COLUMN companyDescription        │ Position  │ destructive but safe — 0 rows                     │   
-  ├────────────────────────────────────────────────────────────┼───────────┼───────────────────────────────────────────────────┤   
-  │ CREATE TYPE "FileType" AS ENUM ('PDF', 'DOCX')             │ new type  │ none                                              │   
-  ├────────────────────────────────────────────────────────────┼───────────┼───────────────────────────────────────────────────┤   
-  │ ALTER TABLE Resume ALTER COLUMN fileType TYPE "FileType"   │ Resume    │ safe — 0 rows; narrowing type, risky post-data    │   
-  └────────────────────────────────────────────────────────────┴───────────┴───────────────────────────────────────────────────┘   
+| Operation | Table | Risk with 0 rows |
+| --- | --- | --- |
+| CREATE TABLE Address | new | none |
+| ALTER TABLE Candidate ADD COLUMN addressId INT NOT NULL UNIQUE | Candidate | safe — 0 rows |
+| ALTER TABLE Candidate DROP COLUMN address | Candidate | destructive but safe — 0 rows; irreversible post-data |
+| ALTER TABLE Company ADD COLUMN description TEXT | Company | none |
+| ALTER TABLE Position DROP COLUMN companyDescription | Position | destructive but safe — 0 rows |
+| CREATE TYPE "FileType" AS ENUM ('PDF', 'DOCX') | new type | none |
+| ALTER TABLE Resume ALTER COLUMN fileType TYPE "FileType" | Resume | safe — 0 rows; narrowing type, risky post-data |
 
   ---
   State: STEP_1_REVIEW — all blocking questions resolved, migration preview confirmed.
 
   Reply step 2 to proceed to common queries + index analysis.
 
+### FP-5.2
 ❯ create a report in docs and continue to step 2 
 
- Step 2 — Common Queries, pg_stat_statements & Index Proposals                                                                       
-  docs/common-queries.sql — 12 queries                                                                                             
-                                                                                                                                   
-  ┌─────┬────────────────────────────────────────────────────┬────────────┬─────────────────────────────────────────────┐
-  │ ID  │                       Topic                        │ Frequency  │                 Key tables                  │
-  ├─────┼────────────────────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤
-  │ Q1  │ Open positions for a company (paginated)           │ High       │ Position                                    │
-  ├─────┼────────────────────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤
-  │ Q2  │ Active applications by candidate                   │ High       │ Application, Position, Company              │
-  ├─────┼────────────────────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤
-  │ Q3  │ Pipeline funnel per position                       │ Medium     │ Application                                 │
-  ├─────┼────────────────────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤
-  │ Q4  │ Interview calendar for employee (date range)       │ High       │ Interview, Application, Candidate, Position │
-  ├─────┼────────────────────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤
-  │ Q5  │ Candidates without any application (backlog)       │ Low/batch  │ Candidate, Application                      │
-  ├─────┼────────────────────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤
-  │ Q6  │ Steps remaining for an in-progress application     │ Medium     │ InterviewStep, Interview                    │
-  ├─────┼────────────────────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤
-  │ Q7  │ Avg score per InterviewType for a position         │ Low/ad-hoc │ Interview, InterviewStep, InterviewType     │
-  ├─────┼────────────────────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤
-  │ Q8  │ Most recent interview per application (bulk)       │ Medium     │ Interview                                   │
-  ├─────┼────────────────────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤
-  │ Q9  │ Job board search by salary range + employment type │ High       │ Position, Company                           │
-  ├─────┼────────────────────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤
-  │ Q10 │ Companies ranked by application volume             │ Low/weekly │ Company, Position, Application              │
-  ├─────┼────────────────────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤
-  │ Q11 │ Top 5 employees by interviews in last 30 days      │ Low/daily  │ Employee, Interview                         │
-  ├─────┼────────────────────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤
-  │ Q12 │ Stale open positions with zero applications        │ Low/weekly │ Position, Company, Application              │
-  └─────┴────────────────────────────────────────────────────┴────────────┴─────────────────────────────────────────────┘
+ Step 2 — Common Queries, pg_stat_statements & Index Proposals
+  docs/common-queries.sql — 12 queries
+| ID | Topic | Frequency | Key tables |
+| --- | --- | --- | --- |
+| Q1 | Open positions for a company (paginated) | High | Position |
+| Q2 | Active applications by candidate | High | Application, Position, Company |
+| Q3 | Pipeline funnel per position | Medium | Application |
+| Q4 | Interview calendar for employee (date range) | High | Interview, Application, Candidate, Position |
+| Q5 | Candidates without any application (backlog) | Low/batch | Candidate, Application |
+| Q6 | Steps remaining for an in-progress application | Medium | InterviewStep, Interview |
+| Q7 | Avg score per InterviewType for a position | Low/ad-hoc | Interview, InterviewStep, InterviewType |
+| Q8 | Most recent interview per application (bulk) | Medium | Interview |
+| Q9 | Job board search by salary range + employment type | High | Position, Company |
+| Q10 | Companies ranked by application volume | Low/weekly | Company, Position, Application |
+| Q11 | Top 5 employees by interviews in last 30 days | Low/daily | Employee, Interview |
+| Q12 | Stale open positions with zero applications | Low/weekly | Position, Company, Application |
 
   ---
   pg_stat_statements — Hotspot Analysis
@@ -1232,36 +1139,22 @@ style {
 
   Tables are empty. Choose one:
 
-  ┌────────┬────────────────────────────────────────────────────────────────┬────────────────────────────────────────┐
-  │ Option │                          Description                           │             Recommendation             │
-  ├────────┼────────────────────────────────────────────────────────────────┼────────────────────────────────────────┤
-  │ A      │ Defer EXPLAIN ANALYZE to Step 4 after the 1,000-row seed       │ Recommended — plans will be realistic  │
-  ├────────┼────────────────────────────────────────────────────────────────┼────────────────────────────────────────┤
-  │ B      │ Seed 50–200 rows now, capture plans, TRUNCATE at end           │ Useful if you want plans before Step 4 │
-  ├────────┼────────────────────────────────────────────────────────────────┼────────────────────────────────────────┤
-  │ C      │ Run EXPLAIN ANALYZE on empty tables — plans are not predictive │ Fastest; educational only              │
-  └────────┴────────────────────────────────────────────────────────────────┴────────────────────────────────────────┘
+| Option | Description | Recommendation |
+| --- | --- | --- |
+| A | Defer EXPLAIN ANALYZE to Step 4 after the 1,000-row seed | Recommended — plans will be realistic |
+| B | Seed 50–200 rows now, capture plans, TRUNCATE at end | Useful if you want plans before Step 4 |
+| C | Run EXPLAIN ANALYZE on empty tables — plans are not predictive | Fastest; educational only |
 
 ---
   Index Proposals — diff against existing 32 indexes
 
   The following are net-new — none duplicate Migration 4:
 
-  ┌─────┬──────────────────────────────┬───────────┬────────────┬────────┬────────────────────────────────────────────────────────────┐   
-  │  #  │            Index             │   Table   │    Kind    │ Serves │                         Rationale                          │   
-  ├─────┼──────────────────────────────┼───────────┼────────────┼────────┼────────────────────────────────────────────────────────────┤   
-  │     │                              │           │            │        │ Existing employeeId_idx cannot satisfy the date-range      │   
-  │ I1  │ (employeeId, interviewDate)  │ Interview │ btree      │ Q4,    │ predicate without a heap scan; composite enables           │   
-  │     │                              │           │ composite  │ Q11    │ index-only range scan for employee calendar and 30-day     │   
-  │     │                              │           │            │        │ workload queries                                           │   
-  ├─────┼──────────────────────────────┼───────────┼────────────┼────────┼────────────────────────────────────────────────────────────┤   
-  │     │ (employmentType) partial     │           │ partial    │        │ Job board search filters first by open+visible; existing   │   
-  │ I2  │ WHERE status='OPEN' AND      │ Position  │ btree      │ Q9     │ companyId_status_idx leads with companyId and is useless   │   
-  │     │ "isVisible"=true             │           │            │        │ here                                                       │   
-  ├─────┼──────────────────────────────┼───────────┼────────────┼────────┼────────────────────────────────────────────────────────────┤   
-  │ I3  │ (createdAt) partial WHERE    │ Position  │ partial    │ Q12    │ Stale-position alert sorts open positions by age; existing │   
-  │     │ status='OPEN'                │           │ btree      │        │  indexes don't cover this access pattern                   │   
-  └─────┴──────────────────────────────┴───────────┴────────────┴────────┴────────────────────────────────────────────────────────────┘   
+| # | Index | Table | Kind | Serves | Rationale |
+| --- | --- | --- | --- | --- | --- |
+| I1 | (employeeId, interviewDate) | Interview | btree composite | Q4, Q11 | Existing employeeId_idx cannot satisfy the date-range predicate without a heap scan; composite enables index-only range scan for employee calendar and 30-day workload queries |
+| I2 | (employmentType) partial WHERE status='OPEN' AND "isVisible"=true | Position | partial btree | Q9 | Job board search filters first by open+visible; existing companyId_status_idx leads with companyId and is useless here |
+| I3 | (createdAt) partial WHERE status='OPEN' | Position | partial btree | Q12 | Stale-position alert sorts open positions by age; existing indexes don't cover this access pattern |
 
   No action until you reply execute.
 
@@ -1273,26 +1166,22 @@ style {
 
   You can combine both in one reply (e.g. A, execute or B, skip).
 
-
+### FP-5.3
 ❯ 1) B. 2) Apply I1-I3
 
 ---
-  Step 2 — Complete Report                                                                                                                    
-  State: STEP_2_REVIEW                                                                                                                                                                                                                                                                
-  ---
+  Step 2 — Complete Report
+  State:STEP_2_REVIEW 
+---
   Indexes Applied ✅
 
   All three confirmed in pg_indexes:
 
-  ┌──────────────────────────────────────────┬───────────┬─────────────────┬─────────────────────────────────────────────────────────┐     
-  │                  Index                   │   Table   │      Kind       │                       Definition                        │     
-  ├──────────────────────────────────────────┼───────────┼─────────────────┼─────────────────────────────────────────────────────────┤     
-  │ Interview_employeeId_interviewDate_idx   │ Interview │ btree composite │ (employeeId, interviewDate)                             │     
-  ├──────────────────────────────────────────┼───────────┼─────────────────┼─────────────────────────────────────────────────────────┤     
-  │ Position_open_visible_employmentType_idx │ Position  │ btree partial   │ (employmentType) WHERE status='OPEN' AND isVisible=true │     
-  ├──────────────────────────────────────────┼───────────┼─────────────────┼─────────────────────────────────────────────────────────┤     
-  │ Position_open_createdAt_idx              │ Position  │ btree partial   │ (createdAt) WHERE status='OPEN'                         │     
-  └──────────────────────────────────────────┴───────────┴─────────────────┴─────────────────────────────────────────────────────────┘     
+| Index | Table | Kind | Definition |
+| --- | --- | --- | --- |
+| Interview_employeeId_interviewDate_idx | Interview | btree composite | (employeeId, interviewDate) |
+| Position_open_visible_employmentType_idx | Position | btree partial | (employmentType) WHERE status='OPEN' AND isVisible=true |
+| Position_open_createdAt_idx | Position | btree partial | (createdAt) WHERE status='OPEN' |
 
   Migration 20260427011538_add_common_query_indexes applied and tracked in _prisma_migrations. Prisma Client regenerated.
 
@@ -1303,53 +1192,29 @@ style {
   ▎ will engage automatically at production scale (typically > ~300 rows for Interview, > ~50 rows for Position). The timing differences   
   ▎ below reflect planner cost recalculation, not index avoidance.
 
-  ┌───────┬────────────────────────────────────────┬─────────┬─────────────────┬────────┬─────────────────────────────────────────────┐    
-  │ Query │              Before plan               │ Before  │   After plan    │ After  │            Index change at scale            │    
-  │       │                                        │   ms    │                 │   ms   │                                             │    
-  ├───────┼────────────────────────────────────────┼─────────┼─────────────────┼────────┼─────────────────────────────────────────────┤    
-  │ Q1    │ Index Scan companyId_status_idx        │ 0.046   │ unchanged       │ —      │ No new index needed ✅                      │    
-  ├───────┼────────────────────────────────────────┼─────────┼─────────────────┼────────┼─────────────────────────────────────────────┤    
-  │ Q2    │ Bitmap candidateId_status_idx          │ 0.299   │ unchanged       │ —      │ No new index needed ✅                      │    
-  ├───────┼────────────────────────────────────────┼─────────┼─────────────────┼────────┼─────────────────────────────────────────────┤    
-  │ Q3    │ Bitmap positionId_status_idx           │ 0.395   │ unchanged       │ —      │ No new index needed ✅                      │    
-  ├───────┼────────────────────────────────────────┼─────────┼─────────────────┼────────┼─────────────────────────────────────────────┤    
-  │ Q4    │ Bitmap employeeId_idx + date           │ 0.279   │ Seq Scan (table │ 0.392  │ I1 replaces single-col idx: date becomes    │    
-  │       │ post-filter                            │         │  too small)     │        │ index condition                             │    
-  ├───────┼────────────────────────────────────────┼─────────┼─────────────────┼────────┼─────────────────────────────────────────────┤    
-  │ Q5    │ Index Only Scan candidateId_status_idx │ 0.173   │ unchanged       │ —      │ No new index needed ✅                      │    
-  ├───────┼────────────────────────────────────────┼─────────┼─────────────────┼────────┼─────────────────────────────────────────────┤    
-  │ Q6    │ Index chain (all pkeys)                │ 3.003   │ unchanged       │ —      │ Filter on Interview could benefit from      │    
-  │       │                                        │         │                 │        │ (interviewStepId, applicationId) — deferred │    
-  ├───────┼────────────────────────────────────────┼─────────┼─────────────────┼────────┼─────────────────────────────────────────────┤    
-  │ Q7    │ Seq Scan Interview + Hash              │ 0.654   │ unchanged       │ —      │ No new index needed ✅                      │    
-  ├───────┼────────────────────────────────────────┼─────────┼─────────────────┼────────┼─────────────────────────────────────────────┤    
-  │ Q8    │ Bitmap applicationId_interviewDate_idx │ 0.310   │ unchanged       │ —      │ No new index needed ✅                      │    
-  ├───────┼────────────────────────────────────────┼─────────┼─────────────────┼────────┼─────────────────────────────────────────────┤    
-  │ Q9    │ Index Scan companyId_status_idx +      │ 0.100   │ Seq Scan (table │ 0.240  │ I2: employmentType becomes index condition  │    
-  │       │ post-filter                            │         │  too small)     │        │ on open+visible                             │    
-  ├───────┼────────────────────────────────────────┼─────────┼─────────────────┼────────┼─────────────────────────────────────────────┤    
-  │ Q10   │ Seq Scan Position + Bitmap             │ 0.217   │ unchanged       │ —      │ No new index needed ✅                      │    
-  ├───────┼────────────────────────────────────────┼─────────┼─────────────────┼────────┼─────────────────────────────────────────────┤    
-  │ Q11   │ Seq Scan Interview (date post-filter)  │ 0.138   │ Seq Scan (table │ 0.186  │ I1: date becomes leading index condition    │    
-  │       │                                        │         │  too small)     │        │                                             │    
-  ├───────┼────────────────────────────────────────┼─────────┼─────────────────┼────────┼─────────────────────────────────────────────┤    
-  │ Q12   │ Index Scan companyId_status_idx +      │ 0.062   │ Seq Scan (table │ 0.124  │ I3: createdAt becomes index range on open   │    
-  │       │ createdAt filter                       │         │  too small)     │        │ positions                                   │    
-  └───────┴────────────────────────────────────────┴─────────┴─────────────────┴────────┴─────────────────────────────────────────────┘    
+| Query | Before plan | Before ms | After plan | After ms | Index change at scale |
+| --- | --- | --- | --- | --- | --- |
+| Q1 | Index Scan companyId_status_idx | 0.046 | unchanged | — | No new index needed ✅ |
+| Q2 | Bitmap candidateId_status_idx | 0.299 | unchanged | — | No new index needed ✅ |
+| Q3 | Bitmap positionId_status_idx | 0.395 | unchanged | — | No new index needed ✅ |
+| Q4 | Bitmap employeeId_idx + date post-filter | 0.279 | Seq Scan (table too small) | 0.392 | I1 replaces single-col idx: date becomes index condition |
+| Q5 | Index Only Scan candidateId_status_idx | 0.173 | unchanged | — | No new index needed ✅ |
+| Q6 | Index chain (all pkeys) | 3.003 | unchanged | — | Filter on Interview could benefit from (interviewStepId, applicationId) — deferred |
+| Q7 | Seq Scan Interview + Hash | 0.654 | unchanged | — | No new index needed ✅ |
+| Q8 | Bitmap applicationId_interviewDate_idx | 0.310 | unchanged | — | No new index needed ✅ |
+| Q9 | Index Scan companyId_status_idx + post-filter | 0.100 | Seq Scan (table too small) | 0.240 | I2: employmentType becomes index condition on open+visible |
+| Q10 | Seq Scan Position + Bitmap | 0.217 | unchanged | — | No new index needed ✅ |
+| Q11 | Seq Scan Interview (date post-filter) | 0.138 | Seq Scan (table too small) | 0.186 | I1: date becomes leading index condition |
+| Q12 | Index Scan companyId_status_idx + createdAt filter | 0.062 | Seq Scan (table too small) | 0.124 | I3: createdAt becomes index range on open positions |
 
   Expected production impact (at scale):
 
-  ┌────────────────────────────────┬───────┬────────────────────────────────────────────────────┬────────────────────────────────────┐     
-  │             Index              │ Query │                    Scan change                     │          Expected speedup          │     
-  ├────────────────────────────────┼───────┼────────────────────────────────────────────────────┼────────────────────────────────────┤     
-  │ I1 (employeeId, interviewDate) │ Q4    │ Bitmap single-col + heap filter → Index Range Scan │ 3–10× for high-volume interviewers │     
-  ├────────────────────────────────┼───────┼────────────────────────────────────────────────────┼────────────────────────────────────┤     
-  │ I1 (employeeId, interviewDate) │ Q11   │ Full Seq Scan → Index Range Scan by date           │ 5–20× as Interview table grows     │     
-  ├────────────────────────────────┼───────┼────────────────────────────────────────────────────┼────────────────────────────────────┤     
-  │ I2 partial (employmentType)    │ Q9    │ Full scan + multi-filter → Partial Index Scan      │ 2–5× on populated job boards       │     
-  ├────────────────────────────────┼───────┼────────────────────────────────────────────────────┼────────────────────────────────────┤     
-  │ I3 partial (createdAt)         │ Q12   │ Full scan + double filter → Partial Index Range    │ 3–8× as open positions accumulate  │     
-  └────────────────────────────────┴───────┴────────────────────────────────────────────────────┴────────────────────────────────────┘     
+| Index | Query | Scan change | Expected speedup |
+| --- | --- | --- | --- |
+| I1 (employeeId, interviewDate) | Q4 | Bitmap single-col + heap filter → Index Range Scan | 3–10× for high-volume interviewers |
+| I1 (employeeId, interviewDate) | Q11 | Full Seq Scan → Index Range Scan by date | 5–20× as Interview table grows |
+| I2 partial (employmentType) | Q9 | Full scan + multi-filter → Partial Index Scan | 2–5× on populated job boards |
+| I3 partial (createdAt) | Q12 | Full scan + double filter → Partial Index Range | 3–8× as open positions accumulate |
 
   ---
   pg_stat_statements Hotspot Summary
@@ -1363,51 +1228,38 @@ style {
   Awaiting your decision: reply step 3 to proceed to migration risk review (covers both the Step 1 normalization migration and the Step 2  
   index migration).
 
-❯ what were the results of doing the B option?                                                                                                                                                                                                                                    
+### FP-5.4
+❯ what were the results of doing the B option?
 ● The Option B run produced three categories of findings:
-                      
-  1. All 12 queries execute correctly — zero errors                                                                                           
+
+  1. All 12 queries execute correctly — zero errors
   Every query ran against real data and returned sensible results. This is the primary value of Option B: structural correctness confirmed 
   before Step 4 plants 1 000 rows.
 
   ---
   2. Existing indexes are being used well (7 of 12 queries)
 
-  ┌───────┬───────────────────────────────────────────────────────────────┐
-  │ Query │                           Index hit                           │
-  ├───────┼───────────────────────────────────────────────────────────────┤
-  │ Q1    │ Position_companyId_status_idx → Index Scan                    │
-  ├───────┼───────────────────────────────────────────────────────────────┤
-  │ Q2    │ Application_candidateId_status_idx → Bitmap Index Scan        │
-  ├───────┼───────────────────────────────────────────────────────────────┤
-  │ Q3    │ Application_positionId_status_idx → Bitmap Index Scan         │
-  ├───────┼───────────────────────────────────────────────────────────────┤
-  │ Q5    │ Application_candidateId_status_idx → Index Only Scan          │
-  ├───────┼───────────────────────────────────────────────────────────────┤
-  │ Q6    │ Full pkey chain across 4 joins                                │
-  ├───────┼───────────────────────────────────────────────────────────────┤
-  │ Q8    │ Interview_applicationId_interviewDate_idx → Bitmap Index Scan │
-  ├───────┼───────────────────────────────────────────────────────────────┤
-  │ Q12   │ Position_companyId_status_idx → Index Scan                    │
-  └───────┴───────────────────────────────────────────────────────────────┘
+| Query | Index hit |
+| --- | --- |
+| Q1 | Position_companyId_status_idx → Index Scan |
+| Q2 | Application_candidateId_status_idx → Bitmap Index Scan |
+| Q3 | Application_positionId_status_idx → Bitmap Index Scan |
+| Q5 | Application_candidateId_status_idx → Index Only Scan |
+| Q6 | Full pkey chain across 4 joins |
+| Q8 | Interview_applicationId_interviewDate_idx → Bitmap Index Scan |
+| Q12 | Position_companyId_status_idx → Index Scan |
 
   ---
   3. Index gaps confirmed — validated the I1/I2/I3 proposals
 
   The before-plans revealed exactly where indexes fall short:
 
-  ┌───────┬─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  
-  │ Query │                                                        Gap observed                                                         │  
-  ├───────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
-  │ Q4    │ Interview_employeeId_idx used (single column), then interviewDate applied as a heap filter — 21 of 30 rows discarded        │  
-  │       │ post-index                                                                                                                  │  
-  ├───────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
-  │ Q9    │ Position_companyId_status_idx used for status, then employmentType / isVisible applied as heap filters                      │  
-  ├───────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
-  │ Q11   │ Full Seq Scan on Interview — 22 of 30 rows removed by the date filter with no index help                                    │  
-  ├───────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  
-  │ Q12   │ Position_companyId_status_idx used for status, then createdAt applied as a heap filter                                      │  
-  └───────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  
+| Query | Gap observed |
+| --- | --- |
+| Q4 | Interview_employeeId_idx used (single column), then interviewDate applied as a heap filter — 21 of 30 rows discarded post-index |
+| Q9 | Position_companyId_status_idx used for status, then employmentType / isVisible applied as heap filters |
+| Q11 | Full Seq Scan on Interview — 22 of 30 rows removed by the date filter with no index help |
+| Q12 | Position_companyId_status_idx used for status, then createdAt applied as a heap filter |
 
   This confirmed I1 (composite employeeId, interviewDate), I2 (partial on employmentType), and I3 (partial on createdAt) are the right     
   fixes.
@@ -1426,103 +1278,41 @@ style {
   ---
   State: STEP_2_REVIEW — reply step 3 to proceed to migration risk review.
 
-❯ step3
+### FP-5.5
+❯ step 3
 
   Row Counts at Review Time
 
-  ┌──────────────┬──────┐
-  │    Table     │ Rows │
-  ├──────────────┼──────┤
-  │ Candidate    │ 0    │
-  ├──────────────┼──────┤
-  │ Resume       │ 0    │
-  ├──────────────┼──────┤
-  │ Position     │ 0    │
-  ├──────────────┼──────┤
-  │ Company      │ 0    │
-  ├──────────────┼──────┤
-  │ (all others) │ 0    │
-  └──────────────┴──────┘
+| Table | Rows |
+| --- | --- |
+| Candidate | 0 |
+| Resume | 0 |
+| Position | 0 |
+| Company | 0 |
+| (all others) | 0 |
 
   Findings
 
-  #: 1
-  Operation: CREATE TABLE Address
-  Table: Address (new)
-  Rows: 0
-  Short-term Risk: low
-  Risk narrative: Additive. No existing data affected.
-  ────────────────────────────────────────
-  #: 2
-  Operation: CREATE UNIQUE INDEX Address(street,city,postalCode,country)
-  Table: Address
-  Rows: 0
-  Short-term Risk: low
-  Risk narrative: Dedup constraint on new empty table. Risk deferred to contract phase when rows exist and duplicates must be resolved before
-
-    enforcing uniqueness.
-  ────────────────────────────────────────
-  #: 3
-  Operation: ALTER TABLE Candidate ADD COLUMN addressId INT NULLABLE
-  Table: Candidate
-  Rows: 0
-  Short-term Risk: low
-  Risk narrative: Additive nullable column. Zero downtime. Existing address VARCHAR(100) kept intact in expand phase.
-  ────────────────────────────────────────
-  #: 4
-  Operation: ADD CONSTRAINT Candidate_addressId_fkey FK → Address
-  Table: Candidate
-  Rows: 0
-  Short-term Risk: low
-  Risk narrative: FK on nullable column with 0 rows. Validates referential integrity going forward.
-  ────────────────────────────────────────
-  #: 5
-  Operation: CREATE UNIQUE INDEX Candidate(addressId)
-  Table: Candidate
-  Rows: 0
-  Short-term Risk: low
-  Risk narrative: Enforces one-to-one with 0 rows. Risk deferred: if rows existed without an address, the unique constraint would block      
-  insert
-    of NULL (allowed by default; NULL ≠ NULL in UNIQUE).
-  ────────────────────────────────────────
-  #: 6
-  Operation: ALTER TABLE Company ADD COLUMN description TEXT
-  Table: Company
-  Rows: 0
-  Short-term Risk: low
-  Risk narrative: Additive nullable column. No risk.
-  ────────────────────────────────────────
-  #: 7
-  Operation: CREATE TYPE "FileType" AS ENUM ('PDF','DOCX')
-  Table: (new type)
-  Rows: —
-  Short-term Risk: low
-  Risk narrative: New enum. Expanding an enum is safe; narrowing it later is the risky operation.
-  ────────────────────────────────────────
-  #: 8
-  Operation: ALTER TABLE Resume ADD COLUMN fileTypeParsed FileType?
-  Table: Resume
-  Rows: 0
-  Short-term Risk: low
-  Risk narrative: Additive nullable column alongside old fileType VARCHAR(50). Old column untouched.
+| # | Operation | Table | Rows | Short-term Risk | Risk narrative |
+| --- | --- | --- | --- | --- | --- |
+| 1 | CREATE TABLE Address | Address (new) | 0 | low | Additive. No existing data affected. |
+| 2 | CREATE UNIQUE INDEX Address(street,city,postalCode,country) | Address | 0 | low | Dedup constraint on new empty table. Risk deferred to contract phase when rows exist and duplicates must be resolved before enforcing uniqueness. |
+| 3 | ALTER TABLE Candidate ADD COLUMN addressId INT NULLABLE | Candidate | 0 | low | Additive nullable column. Zero downtime. Existing address VARCHAR(100) kept intact in expand phase. |
+| 4 | ADD CONSTRAINT Candidate_addressId_fkey FK → Address | Candidate | 0 | low | FK on nullable column with 0 rows. Validates referential integrity going forward. |
+| 5 | CREATE UNIQUE INDEX Candidate(addressId) | Candidate | 0 | low | Enforces one-to-one with 0 rows. Risk deferred: if rows existed without an address, the unique constraint would block insert of NULL (allowed by default; NULL ≠ NULL in UNIQUE). |
+| 6 | ALTER TABLE Company ADD COLUMN description TEXT | Company | 0 | low | Additive nullable column. No risk. |
+| 7 | CREATE TYPE "FileType" AS ENUM ('PDF','DOCX') | (new type) | — | low | New enum. Expanding an enum is safe; narrowing it later is the risky operation. |
+| 8 | ALTER TABLE Resume ADD COLUMN fileTypeParsed FileType? | Resume | 0 | low | Additive nullable column alongside old fileType VARCHAR(50). Old column untouched. |
 
   CONTRACT phase operations (NOT in this migration — separate future migration):
 
-  ┌───────────────────────────────────────────┬───────────┬─────────────────────────────────────────────┬───────────────────────────────┐    
-  │                 Operation                 │   Table   │            Risk when rows exist             │            Recipe             │    
-  ├───────────────────────────────────────────┼───────────┼─────────────────────────────────────────────┼───────────────────────────────┤    
-  │ DROP COLUMN Candidate.address             │ Candidate │ HIGH — irreversible data loss               │ Expand-migrate-contract below │    
-  ├───────────────────────────────────────────┼───────────┼─────────────────────────────────────────────┼───────────────────────────────┤    
-  │ ALTER COLUMN Candidate.addressId SET NOT  │ Candidate │ MEDIUM — fails if any row has NULL          │ Backfill recipe below         │    
-  │ NULL                                      │           │ addressId                                   │                               │    
-  ├───────────────────────────────────────────┼───────────┼─────────────────────────────────────────────┼───────────────────────────────┤    
-  │ DROP COLUMN Position.companyDescription   │ Position  │ HIGH — irreversible data loss               │ Expand-migrate-contract below │    
-  ├───────────────────────────────────────────┼───────────┼─────────────────────────────────────────────┼───────────────────────────────┤    
-  │ DROP COLUMN Resume.fileType               │ Resume    │ HIGH — irreversible data loss               │ Expand-migrate-contract below │    
-  ├───────────────────────────────────────────┼───────────┼─────────────────────────────────────────────┼───────────────────────────────┤    
-  │ RENAME COLUMN Resume.fileTypeParsed TO    │ Resume    │ MEDIUM — breaks any code still reading old  │ Blue/green or maintenance     │    
-  │ fileType                                  │           │ column name                                 │ window                        │    
-  └───────────────────────────────────────────┴───────────┴─────────────────────────────────────────────┴───────────────────────────────┘    
+| Operation | Table | Risk when rows exist | Recipe |
+| --- | --- | --- | --- |
+| DROP COLUMN Candidate.address | Candidate | HIGH — irreversible data loss | Expand-migrate-contract below |
+| ALTER COLUMN Candidate.addressId SET NOT NULL | Candidate | MEDIUM — fails if any row has NULL addressId | Backfill recipe below |
+| DROP COLUMN Position.companyDescription | Position | HIGH — irreversible data loss | Expand-migrate-contract below |
+| DROP COLUMN Resume.fileType | Resume | HIGH — irreversible data loss | Expand-migrate-contract below |
+| RENAME COLUMN Resume.fileTypeParsed TO fileType | Resume | MEDIUM — breaks any code still reading old column name | Blue/green or maintenance window |
 
   ---
   Migration Risk Report B — add_common_query_indexes (Step 2)
@@ -1531,19 +1321,11 @@ style {
 
   Findings
 
-  ┌─────┬───────────────────────────────────────────────────────┬───────────┬───────────┬──────────────┬───────────────────────────────┐     
-  │  #  │                       Operation                       │   Table   │ Rows at   │ Short-term   │        Risk narrative         │     
-  │     │                                                       │           │   apply   │     Risk     │                               │     
-  ├─────┼───────────────────────────────────────────────────────┼───────────┼───────────┼──────────────┼───────────────────────────────┤     
-  │ 1   │ CREATE INDEX Interview(employeeId, interviewDate)     │ Interview │ 0         │ low          │ Non-unique, non-blocking.     │     
-  │     │                                                       │           │           │              │ Composite btree.              │     
-  ├─────┼───────────────────────────────────────────────────────┼───────────┼───────────┼──────────────┼───────────────────────────────┤     
-  │ 2   │ CREATE INDEX Position(employmentType) WHERE           │ Position  │ 0         │ low          │ Partial index, additive. No   │     
-  │     │ status='OPEN' AND isVisible=true                      │           │           │              │ data affected.                │     
-  ├─────┼───────────────────────────────────────────────────────┼───────────┼───────────┼──────────────┼───────────────────────────────┤     
-  │ 3   │ CREATE INDEX Position(createdAt) WHERE status='OPEN'  │ Position  │ 0         │ low          │ Partial index, additive. No   │     
-  │     │                                                       │           │           │              │ data affected.                │     
-  └─────┴───────────────────────────────────────────────────────┴───────────┴───────────┴──────────────┴───────────────────────────────┘     
+| # | Operation | Table | Rows at apply | Short-term Risk | Risk narrative |
+| --- | --- | --- | --- | --- | --- |
+| 1 | CREATE INDEX Interview(employeeId, interviewDate) | Interview | 0 | low | Non-unique, non-blocking. Composite btree. |
+| 2 | CREATE INDEX Position(employmentType) WHERE status='OPEN' AND isVisible=true | Position | 0 | low | Partial index, additive. No data affected. |
+| 3 | CREATE INDEX Position(createdAt) WHERE status='OPEN' | Position | 0 | low | Partial index, additive. No data affected. |
 
   No DROP, no UNIQUE on populated table, no ALTER TYPE, no ALTER COLUMN SET NOT NULL. Verdict: safe (already applied).
 
@@ -1554,7 +1336,7 @@ style {
 
   Migration B (add_common_query_indexes): already applied — no action needed, acknowledge with ok.
 
-
+### FP-5.6
 ❯ create the report for step 2 which I forgot to ask, and revise migration first for this step
 
 State: STEP_3 — Migration A under revision.
@@ -1580,12 +1362,13 @@ State: STEP_3 — Migration A under revision.
 
   Tell me what to change and I'll update the migration SQL before applying.
 
-  
-❯ Explain me in detail what each of the 5 proposed migration steps are going to do and why                                                                           
-                                                                                          
+### FP-5.7
+❯ Explain me in detail what each of the 5 proposed migration steps are going to do and why
+
 ● Here is a detailed walkthrough of each operation, what it does at the database level, and why it was designed that way.
-                                                                                                                                                                     
-  ---                                                                                                                                                                
+
+  ---
+
   1. CREATE TABLE Address + indexes                                                                                                                                                                                                                                                                                                       
   CREATE TABLE "Address" (                                                                                                                                           
     "id"         SERIAL        PRIMARY KEY,
@@ -1602,19 +1385,13 @@ State: STEP_3 — Migration A under revision.
   CREATE INDEX "Address_city_country_idx"
       ON "Address" ("city", "country");
 
-  What it does: Creates a brand-new table to hold structured address data. Right now the Candidate table stores an address as a single opaque string like "123 Main  
-  St, New York" in a VARCHAR(100) column — there's no way to query "all candidates in New York" without a full text scan. This creates a proper relational home for  
-  addresses with separate, queryable fields.
+  What it does: Creates a brand-new table to hold structured address data. Right now the Candidate table stores an address as a single opaque string like "123 Main St, New York" in a VARCHAR(100) column — there's no way to query "all candidates in New York" without a full text scan. This creates a proper relational home for addresses with separate, queryable fields.
 
-  Why structured: city and country are NOT NULL because every real address has at least a city and country. street, region, and postalCode are nullable because some 
-  addresses (e.g., remote workers, international candidates) legitimately omit them.
+  Why structured: city and country are NOT NULL because every real address has at least a city and country. street, region, and postalCode are nullable because some addresses (e.g., remote workers, international candidates) legitimately omit them.
 
-  Why the unique index: @@unique([street, city, postalCode, country]) — this was your decision (Q5 in Step 1). It prevents duplicate address rows, so if two
-  candidates share the same address (e.g., a household), the database stores one Address row and both Candidate rows point to it via FK. This deduplicates data      
-  rather than repeating it.
+  Why the unique index: @@unique([street, city, postalCode, country]) — this was your decision (Q5 in Step 1). It prevents duplicate address rows, so if two candidates share the same address (e.g., a household), the database stores one Address row and both Candidate rows point to it via FK. This deduplicates data rather than repeating it.
 
-  Why the city, country index: The main query filter pattern for addresses is geographic — "find candidates in Barcelona" or "find candidates in Spain." This        
-  composite index makes those filters fast without scanning every row.
+  Why the city, country index: The main query filter pattern for addresses is geographic — "find candidates in Barcelona" or "find candidates in Spain." This composite index makes those filters fast without scanning every row.
 
   ---
   2. ALTER TABLE Candidate ADD COLUMN addressId INT + FK + UNIQUE
@@ -1628,17 +1405,11 @@ State: STEP_3 — Migration A under revision.
 
   What it does: Adds the bridge between Candidate and the new Address table. Three sub-operations:
 
-  - ADD COLUMN addressId INTEGER (nullable): Adds a new column to Candidate that will hold the ID of their address row. It is nullable in this expand phase because  
-  existing candidates don't have an Address row yet — making it NOT NULL immediately would block any insert of a candidate before an address is created first. The   
-  old address VARCHAR(100) column is left in place — nothing is dropped here.
-  - ADD CONSTRAINT FK: Tells the database that addressId must always reference a valid row in Address. ON UPDATE CASCADE means if an Address's id changes (rare with 
-  serials, but safe to have), the candidate's addressId updates automatically. ON DELETE RESTRICT means you cannot delete an Address row if a Candidate still points 
-  to it — this protects against orphaning a candidate.
-  - CREATE UNIQUE INDEX on addressId: Enforces the one-to-one relationship you decided in Step 1 (Q1: single address per candidate). Without this, multiple
-  candidates could reference the same Address row, making it many-to-one. With this unique constraint, each Address row can belong to at most one candidate.
+  - ADD COLUMN addressId INTEGER (nullable): Adds a new column to Candidate that will hold the ID of their address row. It is nullable in this expand phase because existing candidates don't have an Address row yet — making it NOT NULL immediately would block any insert of a candidate before an address is created first. The old address VARCHAR(100) column is left in place — nothing is dropped here.
+  - ADD CONSTRAINT FK: Tells the database that addressId must always reference a valid row in Address. ON UPDATE CASCADE means if an Address's id changes (rare with serials, but safe to have), the candidate's addressId updates automatically. ON DELETE RESTRICT means you cannot delete an Address row if a Candidate still points to it — this protects against orphaning a candidate.
+  - CREATE UNIQUE INDEX on addressId: Enforces the one-to-one relationship you decided in Step 1 (Q1: single address per candidate). Without this, multiple candidates could reference the same Address row, making it many-to-one. With this unique constraint, each Address row can belong to at most one candidate.
 
-  Why nullable now: This is the "expand" half of the expand-migrate-contract pattern. You keep the old address column working while the application is updated to    
-  write to addressId instead. Once every candidate has an addressId populated, a later "contract" migration makes it NOT NULL and drops the old column.
+  Why nullable now: This is the "expand" half of the expand-migrate-contract pattern. You keep the old address column working while the application is updated to write to addressId instead. Once every candidate has an addressId populated, a later "contract" migration makes it NOT NULL and drops the old column.
 
   ---
   3. ALTER TABLE Company ADD COLUMN description TEXT
@@ -1647,16 +1418,11 @@ State: STEP_3 — Migration A under revision.
 
   What it does: Adds an optional text field to Company to hold a description of the company.
 
-  Why: This is the 3NF fix for Position.companyDescription. Right now every Position row has its own companyDescription column — which means the same company        
-  description is repeated across every job posting for that company. That is a transitive dependency: Position.companyDescription depends on Position.companyId      
-  (which company it is), not on the position itself. In 3NF, a fact about a company belongs in the Company table. Moving it here means one source of truth: update   
-  the company description in one row, and all positions for that company automatically reflect it.
+  Why: This is the 3NF fix for Position.companyDescription. Right now every Position row has its own companyDescription column — which means the same company description is repeated across every job posting for that company. That is a transitive dependency: Position.companyDescription depends on Position.companyId (which company it is), not on the position itself. In 3NF, a fact about a company belongs in the Company table. Moving it here means one source of truth: update the company description in one row, and all positions for that company automatically reflect it.
 
-  Why nullable: The old companyDescription column on Position still exists during this expand phase. The application will keep reading from
-  Position.companyDescription until it is updated to read from Company.description instead. Making it nullable avoids forcing every existing position to immediately 
-  supply a value through the new path.
+  Why nullable: The old companyDescription column on Position still exists during this expand phase. The application will keep reading from Position.companyDescription until it is updated to read from Company.description instead. Making it nullable avoids forcing every existing position to immediately supply a value through the new path.
 
-  Note: Position.companyDescription is NOT dropped in this migration. That happens in the contract migration after the application layer has fully switched over.    
+  Note: Position.companyDescription is NOT dropped in this migration. That happens in the contract migration after the application layer has fully switched over.
 
   ---
   4. CREATE TYPE FileType AS ENUM ('PDF', 'DOCX')
@@ -1666,26 +1432,22 @@ State: STEP_3 — Migration A under revision.
   What it does: Creates a new PostgreSQL enum type with exactly two valid values: PDF and DOCX.
 
   Why: Currently Resume.fileType is a VARCHAR(50) that accepts any string. In practice the application only stores MIME types — application/pdf or
-  application/vnd.openxmlformats-officedocument.wordprocessingml.document — enforced by Multer at the HTTP layer. But the database itself accepts anything: a typo,  
-  an empty string, a different MIME type. The enum moves that constraint into the database so it is enforced at every write path, not just the web server.
+  application/vnd.openxmlformats-officedocument.wordprocessingml.document — enforced by Multer at the HTTP layer. But the database itself accepts anything: a typo, an empty string, a different MIME type. The enum moves that constraint into the database so it is enforced at every write path, not just the web server.
 
-  Why a separate step from changing the column: You cannot apply a new enum type and alter the column in the same statement. The type must exist first before any    
-  column can reference it. This step purely creates the type; the next step uses it.
+  Why a separate step from changing the column: You cannot apply a new enum type and alter the column in the same statement. The type must exist first before any column can reference it. This step purely creates the type; the next step uses it.
 
   ---
   5. ALTER TABLE Resume ADD COLUMN fileTypeParsed FileType?
 
   ALTER TABLE "Resume" ADD COLUMN "fileTypeParsed" "FileType";
 
-  What it does: Adds a second file-type column to Resume using the new enum type, alongside the existing fileType VARCHAR(50). The old column is left untouched.     
+  What it does: Adds a second file-type column to Resume using the new enum type, alongside the existing fileType VARCHAR(50). The old column is left untouched.
 
   Why a new column instead of directly changing the existing one: This is the expand step of expand-migrate-contract for a type change. Directly running ALTER COLUMN
-   fileType TYPE "FileType" would work right now because the table is empty — but if any VARCHAR value couldn't be cast to the enum (e.g., a full MIME string like   
-  application/pdf vs PDF), it would fail on a populated table with no recovery path. The safer pattern is:
+   fileType TYPE "FileType" would work right now because the table is empty — but if any VARCHAR value couldn't be cast to the enum (e.g., a full MIME string like application/pdf vs PDF), it would fail on a populated table with no recovery path. The safer pattern is:
 
   1. Expand: add fileTypeParsed "FileType" (nullable) — this migration
-  2. Migrate: backfill fileTypeParsed from fileType using an explicit mapping ('application/pdf' → PDF, 'application/vnd...' → DOCX), then update the application to 
-  write to fileTypeParsed
+  2. Migrate: backfill fileTypeParsed from fileType using an explicit mapping ('application/pdf' → PDF, 'application/vnd...' → DOCX), then update the application to write to fileTypeParsed
   3. Contract: DROP COLUMN fileType, RENAME COLUMN fileTypeParsed TO fileType
 
   With 0 rows today this is purely forward-looking discipline — it costs nothing now and protects against data loss the moment real resumes are uploaded.
@@ -1693,19 +1455,13 @@ State: STEP_3 — Migration A under revision.
   ---
   Summary
 
-  ┌──────────────────────────┬───────────────────┬────────────────────────────────────────────┬──────────────────────────────────────┐
-  │           Step           │ Risk now (0 rows) │             What gets dropped              │    When is the old thing removed     │
-  ├──────────────────────────┼───────────────────┼────────────────────────────────────────────┼──────────────────────────────────────┤
-  │ 1. CREATE TABLE Address  │ None              │ Nothing                                    │ N/A — new table                      │
-  ├──────────────────────────┼───────────────────┼────────────────────────────────────────────┼──────────────────────────────────────┤
-  │ 2. Candidate.addressId   │ None              │ Nothing (address VARCHAR kept)             │ Contract migration after app cutover │
-  ├──────────────────────────┼───────────────────┼────────────────────────────────────────────┼──────────────────────────────────────┤
-  │ 3. Company.description   │ None              │ Nothing (Position.companyDescription kept) │ Contract migration after app cutover │
-  ├──────────────────────────┼───────────────────┼────────────────────────────────────────────┼──────────────────────────────────────┤
-  │ 4. CREATE TYPE FileType  │ None              │ Nothing                                    │ N/A — new type                       │
-  ├──────────────────────────┼───────────────────┼────────────────────────────────────────────┼──────────────────────────────────────┤
-  │ 5. Resume.fileTypeParsed │ None              │ Nothing (fileType VARCHAR kept)            │ Contract migration after backfill    │
-  └──────────────────────────┴───────────────────┴────────────────────────────────────────────┴──────────────────────────────────────┘
+| Step | Risk now (0 rows) | What gets dropped | When is the old thing removed |
+| --- | --- | --- | --- |
+| 1. CREATE TABLE Address | None | Nothing | N/A — new table |
+| 2. Candidate.addressId | None | Nothing (address VARCHAR kept) | Contract migration after app cutover |
+| 3. Company.description | None | Nothing (Position.companyDescription kept) | Contract migration after app cutover |
+| 4. CREATE TYPE FileType | None | Nothing | N/A — new type |
+| 5. Resume.fileTypeParsed | None | Nothing (fileType VARCHAR kept) | Contract migration after backfill |
 
   The entire expand migration is additive — it only adds new things. Nothing is dropped, renamed, or modified until the application layer has been updated and       
   validated. This is why the verdict is safe even if rows existed.
@@ -1713,25 +1469,21 @@ State: STEP_3 — Migration A under revision.
   ---
   State: STEP_3 — migration under revision. What would you like to change?
 
-
+### FP-5.8
 ❯ Nothing.I understand there are 8 operations. all with low risk. Accept and apply migration A (normalize-3nf-expand)
 
-● All 6 artifacts confirmed in the live database.                                                                                                                    
-                                                                                                                                                                       ---
-  Migration A — Applied ✅                                                                                                                                                                                                                                                                                                                
-  ┌───────────────────────┬──────────────────────────┬────────────────────────┐                                                                                        │       Artifact        │           Type           │         Status         │                                                                                        ├───────────────────────┼──────────────────────────┼────────────────────────┤                                                                                      
-  │ Address table         │ new table                │ ✅ live                │
-  ├───────────────────────┼──────────────────────────┼────────────────────────┤
-  │ Candidate.addressId   │ nullable FK column       │ ✅ live                │
-  ├───────────────────────┼──────────────────────────┼────────────────────────┤
-  │ Candidate.address     │ legacy VARCHAR(100)      │ ✅ kept (expand phase) │
-  ├───────────────────────┼──────────────────────────┼────────────────────────┤
-  │ Company.description   │ nullable TEXT column     │ ✅ live                │
-  ├───────────────────────┼──────────────────────────┼────────────────────────┤
-  │ FileType              │ new ENUM type            │ ✅ live                │
-  ├───────────────────────┼──────────────────────────┼────────────────────────┤
-  │ Resume.fileTypeParsed │ nullable FileType column │ ✅ live                │
-  └───────────────────────┴──────────────────────────┴────────────────────────┘
+● All 6 artifacts confirmed in the live database.
+
+  ---
+  Migration A — Applied ✅
+| Artifact | Type | Status |
+| --- | --- | --- |
+| Address table | new table | ✅ live |
+| Candidate.addressId | nullable FK column | ✅ live |
+| Candidate.address | legacy VARCHAR(100) | ✅ kept (expand phase) |
+| Company.description | nullable TEXT column | ✅ live |
+| FileType | new ENUM type | ✅ live |
+| Resume.fileTypeParsed | nullable FileType column | ✅ live |
 
   Migration B (add_common_query_indexes) — already applied ✅
 
@@ -1755,47 +1507,39 @@ State: STEP_3 — Migration A under revision.
 
     Reply step 4 to proceed to report queries and the 1 000-row seed.
 
-● Confirmed. All 8 operations map directly to lines in the applied migration:                                                                                        
-  
-  ┌─────┬─────────────────────────────────────────────────────────────┬──────────────────────┐                                                                       
-  │  #  │                    Operation from report                    │ Migration SQL (line) │                                                                         ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤                                                                       
-  │ 1   │ CREATE TABLE Address                                        │ Lines 13–24          │                                                                       
-  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
-  │ 2   │ CREATE UNIQUE INDEX Address(street,city,postalCode,country) │ Lines 27–28          │
-  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
-  │ 3   │ ALTER TABLE Candidate ADD COLUMN addressId INT NULLABLE     │ Line 35              │
-  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
-  │ 4   │ ADD CONSTRAINT Candidate_addressId_fkey FK → Address        │ Lines 37–40          │
-  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
-  │ 5   │ CREATE UNIQUE INDEX Candidate(addressId)                    │ Lines 43–44          │
-  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
-  │ 6   │ ALTER TABLE Company ADD COLUMN description TEXT             │ Line 47              │
-  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
-  │ 7   │ CREATE TYPE "FileType" AS ENUM ('PDF','DOCX')               │ Line 50              │
-  ├─────┼─────────────────────────────────────────────────────────────┼──────────────────────┤
-  │ 8   │ ALTER TABLE Resume ADD COLUMN fileTypeParsed FileType?      │ Line 53              │
-  └─────┴─────────────────────────────────────────────────────────────┴──────────────────────┘
+● Confirmed. All 8 operations map directly to lines in the applied migration:
+
+| # | Operation from report | Migration SQL (line) |
+| --- | --- | --- |
+| 1 | CREATE TABLE Address | Lines 13–24 |
+| 2 | CREATE UNIQUE INDEX Address(street,city,postalCode,country) | Lines 27–28 |
+| 3 | ALTER TABLE Candidate ADD COLUMN addressId INT NULLABLE | Line 35 |
+| 4 | ADD CONSTRAINT Candidate_addressId_fkey FK → Address | Lines 37–40 |
+| 5 | CREATE UNIQUE INDEX Candidate(addressId) | Lines 43–44 |
+| 6 | ALTER TABLE Company ADD COLUMN description TEXT | Line 47 |
+| 7 | CREATE TYPE "FileType" AS ENUM ('PDF','DOCX') | Line 50 |
+| 8 | ALTER TABLE Resume ADD COLUMN fileTypeParsed FileType? | Line 53 |
 
   The contract phase operations (DROP COLUMN, SET NOT NULL, RENAME) are documented as comments at the top of the file (lines 5–10) but intentionally not executed —  
   they belong to a separate future migration after the application layer cuts over.
 
   State: STEP_3_REVIEW — reply step 4 to proceed to report queries and the 1 000-row seed.
 
-  ❯ step3
+### FP-5.9
+❯ step 4
 
-  Clean compile. Both files are ready:                                                                                                                                                       
-                                                                                                                                                                                             
-  docs/common-report-queries.sql — 5 reports:                                                                                                                                                
-                                                                                                                                                                                               ┌─────┬──────────────────────────────────┬───────────────────────────────────────────────────────────────────────────────┐                                                                 
-  │ ID  │              Report              │                             Window functions used                             │                                                                   ├─────┼──────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┤                                                                   │ R1  │ Pipeline Funnel by Position      │ LAG() OVER (PARTITION BY position_id ORDER BY stage_order)                    │                                                                   ├─────┼──────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┤                                                                   │ R2  │ Recruiter Activity Leaderboard   │ ROW_NUMBER() OVER (PARTITION BY companyId ORDER BY interviews_conducted DESC) │                                                                   ├─────┼──────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┤                                                                   │ R3  │ Time-to-Hire by Position/Company │ PERCENTILE_CONT(0.5/0.9) WITHIN GROUP (ORDER BY days_to_hire)                 │                                                                 
-  ├─────┼──────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┤
-  │ R4  │ Stalled Applications             │ ROW_NUMBER() OVER (PARTITION BY position_id ORDER BY last_touch ASC)          │
-  ├─────┼──────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┤
-  │ R5  │ Candidate Quality by Education   │ DENSE_RANK() OVER (ORDER BY p75_score DESC)                                   │
-  └─────┴──────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────┘
+  Clean compile. Both files are ready:
+  docs/common-report-queries.sql — 5 reports:
 
-  backend/prisma/seed.test.ts — guarded, deterministic (faker.seed(20260427)), ~1000 applications across 8 companies, 500 candidates with Education records (needed for R5), status-biased   
-  interviews.
+| ID | Report | Window functions used |
+| --- | --- | --- |
+| R1 | Pipeline Funnel by Position | LAG() OVER (PARTITION BY position_id ORDER BY stage_order) |
+| R2 | Recruiter Activity Leaderboard | ROW_NUMBER() OVER (PARTITION BY companyId ORDER BY interviews_conducted DESC) |
+| R3 | Time-to-Hire by Position/Company | PERCENTILE_CONT(0.5/0.9) WITHIN GROUP (ORDER BY days_to_hire) |
+| R4 | Stalled Applications | ROW_NUMBER() OVER (PARTITION BY position_id ORDER BY last_touch ASC) |
+| R5 | Candidate Quality by Education | DENSE_RANK() OVER (ORDER BY p75_score DESC) |
+
+  backend/prisma/seed.test.ts — guarded, deterministic (faker.seed(20260427)), ~1000 applications across 8 companies, 500 candidates with Education records (needed for R5), status-biased interviews.
 
   ---
   Before running the seed I need two confirmations:
@@ -1806,47 +1550,35 @@ State: STEP_3 — Migration A under revision.
   The run command will be:
   cd backend && ALLOW_DESTRUCTIVE_SEED=true npx ts-node prisma/seed.test.ts
 
- ❯ 1. Yes all is correct and running. 2. execute 
+### FP-5.10
+❯ 1. Yes all is correct and running. 2. execute
 
- ● Seed successful: 500 candidates, 1000 applications, 728 interviews, 750 education records. Now running EXPLAIN ANALYZE on all 5 reports.                                                   
-                                                                                                                                                                                             
-● Running EXPLAIN ANALYZE on all 5 reports in parallel with sample parameter values (R2: 90-day lookback, top 5; R4: 14-day stall threshold).                                                
-                                                                                                                                                                                             
-  Called db 5 times (ctrl+o to expand)                                                                                                                                                       
-                                                                                                                                                                                             
-● All 5 reports executed successfully. Here are the full Step 4 results:                                                                                                                     
-                                                                                                                                                                                               ---
-  Step 4 — Results                                                                                                                                                                              
-  Seed verified                                                                                                                                                                              
-  
-  ┌─────────────┬───────┐
-  │    Table    │ Rows  │
-  ├─────────────┼───────┤
-  │ Candidate   │ 500   │
-  ├─────────────┼───────┤
-  │ Application │ 1,000 │
-  ├─────────────┼───────┤
-  │ Interview   │ 728   │
-  ├─────────────┼───────┤
-  │ Education   │ 750   │
-  └─────────────┴───────┘
+ ● Seed successful: 500 candidates, 1000 applications, 728 interviews, 750 education records. Now running EXPLAIN ANALYZE on all 5 reports.
+
+● Running EXPLAIN ANALYZE on all 5 reports in parallel with sample parameter values (R2: 90-day lookback, top 5; R4: 14-day stall threshold).
+  Called db 5 times (ctrl+o to expand)
+
+● All 5 reports executed successfully. Here are the full Step 4 results:
+  ---
+  Step 4 — Results
+  Seed verified
+| Table | Rows |
+| --- | --- |
+| Candidate | 500 |
+| Application | 1,000 |
+| Interview | 728 |
+| Education | 750 |
 
   ---
   EXPLAIN ANALYZE — All 5 Reports
 
-  ┌──────────────────────────┬───────────────┬────────────────┬─────────────┬────────────────────────────────────────────────────────────────────┐
-  │          Report          │ Rows Returned │ Execution Time │ Buffers Hit │                         Leading Plan Node                          │
-  ├──────────────────────────┼───────────────┼────────────────┼─────────────┼────────────────────────────────────────────────────────────────────┤
-  │ R1 Pipeline Funnel       │ 139           │ 1.496 ms       │ 33          │ WindowAgg (LAG) over HashAggregate                                 │
-  ├──────────────────────────┼───────────────┼────────────────┼─────────────┼────────────────────────────────────────────────────────────────────┤
-  │ R2 Recruiter Leaderboard │ 40            │ 1.038 ms       │ 51          │ WindowAgg + Run Condition prune; Memoize on Company pkey           │
-  ├──────────────────────────┼───────────────┼────────────────┼─────────────┼────────────────────────────────────────────────────────────────────┤
-  │ R3 Time-to-Hire          │ 26            │ 1.350 ms       │ 341         │ GroupAggregate + Nested Loop × 153 Company index lookups           │
-  ├──────────────────────────┼───────────────┼────────────────┼─────────────┼────────────────────────────────────────────────────────────────────┤
-  │ R4 Stalled Applications  │ 564           │ 3.789 ms       │ 40          │ HashAggregate (169 kB) → WindowAgg → post-window idle filter       │
-  ├──────────────────────────┼───────────────┼────────────────┼─────────────┼────────────────────────────────────────────────────────────────────┤
-  │ R5 Candidate Quality     │ 18            │ 2.636 ms       │ 31          │ GroupAggregate + PERCENTILE_CONT over 478 Education-Interview rows │
-  └──────────────────────────┴───────────────┴────────────────┴─────────────┴────────────────────────────────────────────────────────────────────┘
+| Report | Rows Returned | Execution Time | Buffers Hit | Leading Plan Node |
+| --- | --- | --- | --- | --- |
+| R1 Pipeline Funnel | 139 | 1.496 ms | 33 | WindowAgg (LAG) over HashAggregate |
+| R2 Recruiter Leaderboard | 40 | 1.038 ms | 51 | WindowAgg + Run Condition prune; Memoize on Company pkey |
+| R3 Time-to-Hire | 26 | 1.350 ms | 341 | GroupAggregate + Nested Loop × 153 Company index lookups |
+| R4 Stalled Applications | 564 | 3.789 ms | 40 | HashAggregate (169 kB) → WindowAgg → post-window idle filter |
+| R5 Candidate Quality | 18 | 2.636 ms | 31 | GroupAggregate + PERCENTILE_CONT over 478 Education-Interview rows |
 
   ---
   Costliest: R4 — Stalled Applications (3.789 ms)
@@ -1862,90 +1594,59 @@ State: STEP_3 — Migration A under revision.
   ---
   Reply step 5 to optimize R4 — Stalled Applications.
 
-✻ Baked for 3m 28s        
-
+### FP-5.11
 ❯ create a report including all that you did in this step and the results Also include issues you had and how did you resolved.Then continue to step 5
 
 ---
-  Step 5 — Optimize R4: Stalled Applications                                                                                                                                                    
-  Baseline: 3.789 ms execution, 841 rows processed through window, 277 discarded after window, 40 buffer hits.                                                                               
-  
+  Step 5 — Optimize R4: Stalled Applications
+  Baseline: 3.789 ms execution, 841 rows processed through window, 277 discarded after window, 40 buffer hits.
+
   Root Causes (from EXPLAIN plan)
 
-  ┌─────┬────────────────────────────────────────────────────────────────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐   
-  │  #  │                                 Issue                                  │                                               Evidence                                                │   
-  ├─────┼────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ 1   │ idle_duration > 14 days filter applied after ROW_NUMBER()              │ 277 of 841 window rows discarded post-computation — wasted window work                                │   
-  ├─────┼────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ 2   │ COALESCE(last_interview_date, application_date::timestamptz) computed  │ Once in WindowAgg ORDER BY, again in the WHERE filter                                                 │   
-  │     │ twice                                                                  │                                                                                                       │   
-  ├─────┼────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ 3   │ Seq Scan on Application for status NOT IN (HIRED, REJECTED, WITHDRAWN) │ 1000 rows read, 159 discarded — no partial index on active statuses                                   │   
-  ├─────┼────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ 4   │ HashAggregate at 169 kB for MAX(interviewDate) via LEFT JOIN           │ Grows linearly with interview volume; no leveraging of existing Interview(applicationId,              │   
-  │     │                                                                        │ interviewDate) index                                                                                  │   
-  └─────┴────────────────────────────────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘   
+| # | Issue | Evidence |
+| --- | --- | --- |
+| 1 | idle_duration > 14 days filter applied after ROW_NUMBER() | 277 of 841 window rows discarded post-computation — wasted window work |
+| 2 | COALESCE(last_interview_date, application_date::timestamptz) computed twice | Once in WindowAgg ORDER BY, again in the WHERE filter |
+| 3 | Seq Scan on Application for status NOT IN (HIRED, REJECTED, WITHDRAWN) | 1000 rows read, 159 discarded — no partial index on active statuses |
+| 4 | HashAggregate at 169 kB for MAX(interviewDate) via LEFT JOIN | Grows linearly with interview volume; no leveraging of existing Interview(applicationId, interviewDate) index |
 
   ---
   Optimization Proposals
 
-  ┌─────┬─────────────────────────────────────────────────────────────────────────────────┬───────────────────────────────────┬─────────────┬─────────────────────────────┬─────────────┐    
-  │  #  │                                    Approach                                     │           What changes            │    DDL      │      Expected speedup       │  Rollback   │    
-  │     │                                                                                 │                                   │  required?  │                             │             │    
-  ├─────┼─────────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────┼─────────────┼─────────────────────────────┼─────────────┤    
-  │     │ Query Rewrite — move stall threshold filter into a pre_filtered CTE before      │                                   │             │ −50 to −65% execution time  │             │    
-  │ P1  │ ROW_NUMBER(). Replace LEFT JOIN+GROUP BY with a LATERAL that uses the existing  │ docs/common-report-queries.sql    │ None        │ at current scale (window    │ Revert SQL  │    
-  │     │ Interview_applicationId_interviewDate_idx. COALESCE computed once.              │ only                              │             │ operates on 564 rows        │ file        │    
-  │     │                                                                                 │                                   │             │ instead of 841)             │             │    
-  ├─────┼─────────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────┼─────────────┼─────────────────────────────┼─────────────┤    
-  │     │ Partial Index on Application.status — CREATE INDEX … WHERE status NOT IN        │                                   │             │ −60 to −80% on Application  │             │    
-  │ P2  │ ('HIRED','REJECTED','WITHDRAWN') — converts Seq Scan to Index Scan for          │ New Prisma migration              │ Additive    │ read at production scale    │ DROP INDEX  │    
-  │     │ active-application queries                                                      │                                   │ index only  │ (≥10K rows); negligible at  │             │    
-  │     │                                                                                 │                                   │             │ 1K                          │             │    
-  ├─────┼─────────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────┼─────────────┼─────────────────────────────┼─────────────┤    
-  │     │ Both P1 + P2 (recommended) — P1 eliminates post-window waste now; P2            │ docs/common-report-queries.sql +  │ Additive    │                             │ Revert SQL  │    
-  │ P3  │ future-proofs the Application scan at production scale                          │ new migration                     │ index only  │ Best combined outcome       │ + drop      │    
-  │     │                                                                                 │                                   │             │                             │ index       │    
-  └─────┴─────────────────────────────────────────────────────────────────────────────────┴───────────────────────────────────┴─────────────┴─────────────────────────────┴─────────────┘    
+| # | Approach | What changes | DDL required? | Expected speedup | Rollback |
+| --- | --- | --- | --- | --- | --- |
+| P1 | Query Rewrite — move stall threshold filter into a pre_filtered CTE before ROW_NUMBER(). Replace LEFT JOIN+GROUP BY with a LATERAL that uses the existing Interview_applicationId_interviewDate_idx. COALESCE computed once. | docs/common-report-queries.sql only | None | −50 to −65% execution time at current scale (window operates on 564 rows instead of 841) | Revert SQL file |
+| P2 | Partial Index on Application.status — CREATE INDEX … WHERE status NOT IN ('HIRED','REJECTED','WITHDRAWN') — converts Seq Scan to Index Scan for active-application queries | New Prisma migration | Additive index only | −60 to −80% on Application read at production scale (≥10K rows); negligible at 1K | DROP INDEX |
+| P3 | Both P1 + P2 (recommended) — P1 eliminates post-window waste now; P2 future-proofs the Application scan at production scale | docs/common-report-queries.sql + new migration | Additive index only | Best combined outcome | Revert SQL + drop index |
 
   Recommendation: P3. P1 has immediate measurable impact at the current 1K-row scale. P2 is a safe additive index that pays off as Application grows — and since R4 is the recruiter's daily 
   triage report, its access pattern is high-frequency.
 
   Which proposal do you want to apply — P1, P2, or P3?
 
-  ❯ P3
+### FP-5.12
+❯ P3
 
-   ---                                                                                                                                                                                        
-  Step 5 — P3 Applied: Before / After Comparison                                                                                                                                                                                                                                                                                                                                          
-  Changes made                                                                                                                                                                                                                                                                                                                                                                            
-  ┌────────────────────────────────────────────────────┬─────────────────────────────────────────────────────────────────────┐
-  │                       Change                       │                                File                                 │
-  ├────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────┤
-  │ Query rewrite (P1) — LATERAL + pre_filtered CTE    │ docs/common-report-queries.sql (R4 section)                         │
-  ├────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────┤
-  │ Partial index (P2) — Application_active_status_idx │ Migration 20260428120000_optimize_r4_stalled_partial_idx ✅ applied │
-  └────────────────────────────────────────────────────┴─────────────────────────────────────────────────────────────────────┘
+  ---
+  Step 5 — P3 Applied: Before / After Comparison
+  Changes made
+| Change | File |
+| --- | --- |
+| Query rewrite (P1) — LATERAL + pre_filtered CTE | docs/common-report-queries.sql (R4 section) |
+| Partial index (P2) — Application_active_status_idx | Migration 20260428120000_optimize_r4_stalled_partial_idx ✅ applied |
 
   ---
   Before / After Metrics
 
-  ┌──────────────────────┬───────────────────────────────────────────┬──────────────────────────────────────────────────────────────────────┬───────────────────┐
-  │        Metric        │                  Before                   │                                After                                 │       Delta       │
-  ├──────────────────────┼───────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┼───────────────────┤
-  │ Execution time       │ 3.789 ms                                  │ 2.817 ms                                                             │ −25.7%            │
-  ├──────────────────────┼───────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┼───────────────────┤
-  │ Rows through window  │ 841                                       │ 564                                                                  │ −33%              │
-  ├──────────────────────┼───────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┼───────────────────┤
-  │ Rows returned        │ 564                                       │ 564                                                                  │ —                 │
-  ├──────────────────────┼───────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┼───────────────────┤
-  │ Shared buffers hit   │ 40                                        │ 2,008                                                                │ +1,968 (see note) │
-  ├──────────────────────┼───────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┼───────────────────┤
-  │ Interview scan       │ Hash join over 728 rows                   │ Index Only Scan (LATERAL) × 841 lookups                              │ structural change │
-  ├──────────────────────┼───────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┼───────────────────┤
-  │ Application scan     │ Seq Scan (status filter removes 159/1000) │ Seq Scan — partial index not engaged at 1K rows; will engage at ≥10K │                   │
-  ├──────────────────────┼───────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┼───────────────────┤
-  │ COALESCE evaluations │ 3× per row                                │ 1× per row                                                           │ −2 per row        │
-  └──────────────────────┴───────────────────────────────────────────┴──────────────────────────────────────────────────────────────────────┴───────────────────┘
+| Metric | Before | After | Delta |
+| --- | --- | --- | --- |
+| Execution time | 3.789 ms | 2.817 ms | −25.7% |
+| Rows through window | 841 | 564 | −33% |
+| Rows returned | 564 | 564 | — |
+| Shared buffers hit | 40 | 2,008 | +1,968 (see note) |
+| Interview scan | Hash join over 728 rows | Index Only Scan (LATERAL) × 841 lookups | structural change |
+| Application scan | Seq Scan (status filter removes 159/1000) | Seq Scan — partial index not engaged at 1K rows; will engage at ≥10K |  |
+| COALESCE evaluations | 3× per row | 1× per row | −2 per row |
 
   Plan change highlights
 
@@ -1953,19 +1654,16 @@ State: STEP_3 — Migration A under revision.
 
   After: Nested Loop Left Join with LATERAL → stall filter inlined before Sort → WindowAgg operates on 564 rows → Sort
 
-  The planner correctly inlined pre_filtered into the Nested Loop filter, so the window only processes the 564 rows that pass the stall threshold — achieving the goal of the rewrite.       
+  The planner correctly inlined pre_filtered into the Nested Loop filter, so the window only processes the 564 rows that pass the stall threshold — achieving the goal of the rewrite.
 
   Buffer hit note
 
   Buffer count went from 40 → 2,008 because LATERAL issues 841 correlated index lookups (one per active application). The trade-off is deliberate:
 
-  ┌──────────────────────────────────────┬──────────────────────────────────────────┬───────────────────────────────────────────────┐
-  │               Approach               │             At 1K interviews             │              At 100K interviews               │
-  ├──────────────────────────────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────┤
-  │ LEFT JOIN + HashAggregate (original) │ 40 buffer hits, builds 1K-row hash table │ ~100K buffer hits, builds 100K-row hash table │
-  ├──────────────────────────────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────┤
-  │ LATERAL Index Only Scan (new)        │ 2,008 hits (841 × ~2 pages)              │ 841 × O(log 100K) ≈ ~14K hits                 │
-  └──────────────────────────────────────┴──────────────────────────────────────────┴───────────────────────────────────────────────┘
+| Approach | At 1K interviews | At 100K interviews |
+| --- | --- | --- |
+| LEFT JOIN + HashAggregate (original) | 40 buffer hits, builds 1K-row hash table | ~100K buffer hits, builds 100K-row hash table |
+| LATERAL Index Only Scan (new) | 2,008 hits (841 × ~2 pages) | 841 × O(log 100K) ≈ ~14K hits |
 
   The LATERAL approach scales sub-linearly with interview volume. The original scales linearly. The crossover is around ~5K interview rows — well within typical production range.
 
@@ -1973,20 +1671,17 @@ State: STEP_3 — Migration A under revision.
 
   Application_active_status_idx is live and maintained but not engaged at 1K rows (planner correctly prefers Seq Scan). At production scale:
 
-  ┌──────────────────┬──────────────────────────────┬───────────────────────────────────────┐
-  │ Application rows │     Expected scan change     │ Estimated speedup on Application read │
-  ├──────────────────┼──────────────────────────────┼───────────────────────────────────────┤
-  │ 1,000 (current)  │ Seq Scan                     │ —                                     │
-  ├──────────────────┼──────────────────────────────┼───────────────────────────────────────┤
-  │ 10,000           │ Index Scan via partial index │ −60 to −70% on Application step       │
-  ├──────────────────┼──────────────────────────────┼───────────────────────────────────────┤
-  │ 100,000          │ Index Scan via partial index │ −80 to −90% on Application step       │
-  └──────────────────┴──────────────────────────────┴───────────────────────────────────────┘
+| Application rows | Expected scan change | Estimated speedup on Application read |
+| --- | --- | --- |
+| 1,000 (current) | Seq Scan | — |
+| 10,000 | Index Scan via partial index | −60 to −70% on Application step |
+| 100,000 | Index Scan via partial index | −80 to −90% on Application step |
 
   ---
   Reply step 6 to risk-review migration 20260428120000_optimize_r4_stalled_partial_idx before it goes to production.
 
-  ❯ make report and continue to step 6
+### FP-5.13
+❯ make report and continue to step 6
 
   ● Step 6 risk report saved to docs/step-06-migration-risk-report.md.
 
@@ -1997,38 +1692,30 @@ State: STEP_3 — Migration A under revision.
 
   Row counts at review time
 
-  ┌─────────────┬───────┬──────────────────┐
-  │    Table    │ Total │ Active (indexed) │
-  ├─────────────┼───────┼──────────────────┤
-  │ Application │ 1,000 │ 841              │
-  └─────────────┴───────┴──────────────────┘
+| Table | Total | Active (indexed) |
+| --- | --- | --- |
+| Application | 1,000 | 841 |
 
   ---
   Findings
 
-  ┌─────┬────────────────────────┬─────────────┬───────┬─────────────────┬─────────────────────────────────────────────────────────────────────────────┐    
   Migration Risk Report — optimize_r4_stalled_partial_idx
 
   ▎ Status: APPLIED ✅ (dev database — this review is the production promotion gate)
 
   Row counts at review time
 
-  ┌─────────────┬───────┬──────────────────┐
-  │    Table    │ Total │ Active (indexed) │
-  ├─────────────┼───────┼──────────────────┤
-  │ Application │ 1,000 │ 841              │
-  └─────────────┴───────┴──────────────────┘
+| Table | Total | Active (indexed) |
+| --- | --- | --- |
+| Application | 1,000 | 841 |
 
   ---
   Findings
   Findings
 
-  ┌─────┬─────────────────────────────────────┬─────────────┬────────┬───────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐     
-  │  #  │              Operation              │    Table    │  Rows  │    Short-term Risk    │                                                                 Risk Narrative                                                                 │     
-  ├─────┼─────────────────────────────────────┼─────────────┼────────┼───────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤     
-  │ 1   │ CREATE INDEX … WHERE status NOT IN  │ Application │ 1,000  │ low (dev) / medium    │ CREATE INDEX without CONCURRENTLY takes a SHARE lock — blocks Application writes for the full index-build duration. Sub-millisecond at 1K      │     
-  │     │ (HIRED, REJECTED, WITHDRAWN)        │             │ dev    │ (prod at scale)       │ rows; 100ms–2s at 100K rows. CONCURRENTLY cannot be added to the migration file (Prisma wraps migrations in transactions, which forbids it).   │     
-  └─────┴─────────────────────────────────────┴─────────────┴────────┴───────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘     
+| # | Operation | Table | Rows | Short-term Risk | Risk Narrative |
+| --- | --- | --- | --- | --- | --- |
+| 1 | CREATE INDEX … WHERE status NOT IN (HIRED, REJECTED, WITHDRAWN) | Application | 1,000 dev | low (dev) / medium (prod at scale) | CREATE INDEX without CONCURRENTLY takes a SHARE lock — blocks Application writes for the full index-build duration. Sub-millisecond at 1K rows; 100ms–2s at 100K rows. CONCURRENTLY cannot be added to the migration file (Prisma wraps migrations in transactions, which forbids it). |
 
   No destructive DDL. No materialized view. No partitioning. No DROP INDEX. Index does not back any UNIQUE or PK constraint.
 
@@ -2042,7 +1729,8 @@ State: STEP_3 — Migration A under revision.
   CREATE INDEX CONCURRENTLY "Application_active_status_idx"
       ON "Application" ("status")
       WHERE status NOT IN ('HIRED', 'REJECTED', 'WITHDRAWN');
-  # 2. Mark migration as applied without re-running the SQL:
+
+  #### 2. Mark migration as applied without re-running the SQL:
   npx prisma migrate resolve --applied 20260428120000_optimize_r4_stalled_partial_idx
 
   Rollback: DROP INDEX CONCURRENTLY "Application_active_status_idx" — no constraint impact.
@@ -2052,20 +1740,17 @@ State: STEP_3 — Migration A under revision.
 
   Reply step 7 to write the Reports Service guide.
 
-  ❯ Wasnt the schema modified or the migrations applied?
+### FP-5.14
+❯ Wasnt the schema modified or the migrations applied?
 
   ● Here's the confirmed state of Step 6:
 
-  ┌──────────────────────────────────────────────────────────┬───────────────────────────────────────────────────────────────────────────────────────────────┐
-  │                           Item                           │                                            Status                                             │                                                                                        ├──────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Migration 20260428120000_optimize_r4_stalled_partial_idx │ ✅ Applied — confirmed in _prisma_migrations                                                  │                                                                                      
-  ├──────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ Index Application_active_status_idx                      │ ✅ Live in DB — 16 kB, 841 rows indexed                                                       │
-  ├──────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ schema.prisma comment added                              │ ✅ Just added — documents the raw-SQL partial index above the Application model               │
-  ├──────────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ prisma generate                                          │ Not needed — no model, field, or relation changed; Prisma Client is unaffected by a raw index │
-  └──────────────────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────┘
+| Item | Status |
+| --- | --- |
+| Migration 20260428120000_optimize_r4_stalled_partial_idx | ✅ Applied — confirmed in _prisma_migrations |
+| Index Application_active_status_idx | ✅ Live in DB — 16 kB, 841 rows indexed |
+| schema.prisma comment added | ✅ Just added — documents the raw-SQL partial index above the Application model |
+| prisma generate | Not needed — no model, field, or relation changed; Prisma Client is unaffected by a raw index |
 
   Why schema.prisma wasn't changed structurally: Prisma's @@index decorator has no where clause, so partial indexes created in raw migration SQL will never appear in schema.prisma. The comment is the correct way to document them so developers  
   don't duplicate or accidentally remove the index.
@@ -2074,82 +1759,49 @@ State: STEP_3 — Migration A under revision.
 
   Reply step 7 to write the Reports Service guide
 
-  ❯ make a report and continue to step 7
-  ---                     
+### FP-5.15
+❯ make a report and continue to step 7
+  ---
   Workflow Complete
 
-  docs/report-service.md written. Here is the full artifact inventory across all 7 steps:                                                                                                                                                             
-  ---                                                                                                                                                                                                                                               
+  docs/report-service.md written. Here is the full artifact inventory across all 7 steps:
+
+  ---
   All Artifacts Produced
 
   SQL & Query Files
 
-  ┌────────────────────────────────┬───────────────────────────────────────────────────────────────────────────┐
-  │              File              │                                 Contents                                  │
-  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────┤
-  │ docs/common-queries.sql        │ 12 ATS operational queries (Q1–Q12) with index annotations                │
-  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────┤
-  │ docs/common-report-queries.sql │ 5 report queries (R1–R5) using CTEs + window functions; R4 optimized (P3) │
-  └────────────────────────────────┴───────────────────────────────────────────────────────────────────────────┘
+| File | Contents |
+| --- | --- |
+| docs/common-queries.sql | 12 ATS operational queries (Q1–Q12) with index annotations |
+| docs/common-report-queries.sql | 5 report queries (R1–R5) using CTEs + window functions; R4 optimized (P3) |
 
   Migrations Applied (9 total)
 
-  ┌─────┬─────────────────────────────────┬───────────────────────────────────────────────────────────────────────────────────────────────┐
-  │  #  │            Migration            │                                             Scope                                             │
-  ├─────┼─────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ 1–6 │ Pre-existing                    │ Init, ATS core entities, NOT NULL, indexes, enums, pgvector                                   │
-  ├─────┼─────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ 7   │ add_common_query_indexes        │ I1 composite + I2/I3 partial indexes on Interview/Position                                    │
-  ├─────┼─────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ 8   │ normalize_3nf_expand            │ Address table, Candidate.addressId, Company.description, FileType enum, Resume.fileTypeParsed │
-  ├─────┼─────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ 9   │ optimize_r4_stalled_partial_idx │ Partial index on Application active statuses (R4 optimization)                                │
-  └─────┴─────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────┘
+| # | Migration | Scope |
+| --- | --- | --- |
+| 1–6 | Pre-existing | Init, ATS core entities, NOT NULL, indexes, enums, pgvector |
+| 7 | add_common_query_indexes | I1 composite + I2/I3 partial indexes on Interview/Position |
+| 8 | normalize_3nf_expand | Address table, Candidate.addressId, Company.description, FileType enum, Resume.fileTypeParsed |
+| 9 | optimize_r4_stalled_partial_idx | Partial index on Application active statuses (R4 optimization) |
 
   Seed & Reports
 
-  ┌─────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────┐
-  │            File             │                                     Contents                                     │
-  ├─────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
-  │ backend/prisma/seed.test.ts │ Guarded, deterministic seed — 500 candidates, 1,000 applications, 728 interviews │
-  │ backend/prisma/seed.test.ts │ Guarded, deterministic seed — 500 candidates, 1,000 applications, 728 interviews │
-  ├─────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
-  │            File             │                                     Contents                                     │
-  ├─────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
-  │ backend/prisma/seed.test.ts │ Guarded, deterministic seed — 500 candidates, 1,000 applications, 728 interviews │
-  ├─────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
-  │ docs/report-service.md      │ TypedSQL implementation guide for all 5 reports                                  │
-  └─────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────┘
-  │ 9   │ optimize_r4_stalled_partial_idx │ Partial index on Application active statuses (R4 optimization)                                │
-  └─────┴─────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────┘
-
-  Seed & Reports
-
-  ┌─────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────┐
-  │            File             │                                     Contents                                     │
-  ├─────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
-  │ backend/prisma/seed.test.ts │ Guarded, deterministic seed — 500 candidates, 1,000 applications, 728 interviews │
-  ├─────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
-  │ docs/report-service.md      │ TypedSQL implementation guide for all 5 reports                                  │
-  └─────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────┘
+| File | Contents |
+| --- | --- |
+| backend/prisma/seed.test.ts | Guarded, deterministic seed — 500 candidates, 1,000 applications, 728 interviews |
+| docs/report-service.md | TypedSQL implementation guide for all 5 reports |
 
   Step Reports
 
-  ┌───────────────────────────────────────┬─────────────────────────────────────────────┐
-  │                 File                  │                    Step                     │
-  ├───────────────────────────────────────┼─────────────────────────────────────────────┤
-  │ docs/normalization-report.md          │ Step 1 — 3NF audit                          │
-  ├───────────────────────────────────────┼─────────────────────────────────────────────┤
-  │ docs/common-queries-report.md         │ Step 2 — query tuning + EXPLAIN ANALYZE     │
-  ├───────────────────────────────────────┼─────────────────────────────────────────────┤
-  │ docs/migration-risk-report.md         │ Step 3 — risk review (migrations 7 + 8)     │
-  ├───────────────────────────────────────┼─────────────────────────────────────────────┤
-  │ docs/step-04-report.md                │ Step 4 — report queries + seed              │
-  ├───────────────────────────────────────┼─────────────────────────────────────────────┤
-  │ docs/step-05-report.md                │ Step 5 — R4 optimization (P3)               │
-  ├───────────────────────────────────────┼─────────────────────────────────────────────┤
-  │ docs/step-06-migration-risk-report.md │ Step 6 — optimization migration risk review │
-  └───────────────────────────────────────┴─────────────────────────────────────────────┘
+| File | Step |
+| --- | --- |
+| docs/normalization-report.md | Step 1 — 3NF audit |
+| docs/common-queries-report.md | Step 2 — query tuning + EXPLAIN ANALYZE |
+| docs/migration-risk-report.md | Step 3 — risk review (migrations 7 + 8) |
+| docs/step-04-report.md | Step 4 — report queries + seed |
+| docs/step-05-report.md | Step 5 — R4 optimization (P3) |
+| docs/step-06-migration-risk-report.md | Step 6 — optimization migration risk review |
 
   ---
   Open Items Deferred to Follow-up
